@@ -4,13 +4,13 @@ use axum::{routing::get, Json, Router};
 pub fn routes() -> Router {
     Router::new()
         .route("/", get(index))
-        .route("/home", get(homepage))
+        .route("/show", get(show))
 }
 
 async fn index() -> &'static str {
-    "Hello, World!"
+    "User list"
 }
 
-async fn homepage() -> Json<String> {
-    Json("hello dear".to_string())
+async fn show() -> Json<String> {
+    Json("user show".to_string())
 }
