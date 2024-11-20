@@ -8,5 +8,5 @@ pub fn create_routes() -> Router {
 }
 
 async fn index() -> &'static str {
-    "Hello, World!"
+    "Hello, World 2!"
 }
