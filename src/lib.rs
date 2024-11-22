@@ -1,5 +1,7 @@
 mod controllers;
+mod models;
 mod routes;
+mod views;
 
 pub async fn run() {
     let app = routes::create_routes();

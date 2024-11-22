@@ -1,78 +1,38 @@
 use axum::{http::StatusCode, Json};
 use serde::Serialize;
+use serde_json::Value;
 
 #[derive(Serialize)]
-pub struct ApiResponse<T> {
+pub struct ApiResponse {
     pub success: bool,
     pub message: String,
-    pub data: Option<T>,
+    pub data: Option<Value>,
 }
 
-impl<T> ApiResponse<T> {
+impl ApiResponse {
     // Success response
-    pub fn success(message: &str, data: T) -> (StatusCode, Json<ApiResponse<T>>) {
+    pub fn success(
+        message: &str,
+        data: Option<impl Serialize>,
+        status: Option<StatusCode>,
+    ) -> (StatusCode, Json<ApiResponse>) {
+        let serialized_data = data.map(|d| serde_json::to_value(d).unwrap());
+        let status_code = status.unwrap_or(StatusCode::OK); // Use provided status or default to OK
         (
-            StatusCode::OK, // 200 OK
+            status_code,
             Json(ApiResponse {
                 success: true,
                 message: message.to_string(),
-                data: Some(data),
+                data: serialized_data,
             }),
         )
     }
 
     // Failure response
-    pub fn failure(message: &str) -> (StatusCode, Json<ApiResponse<()>>) {
+    pub fn failure(message: &str, status: Option<StatusCode>) -> (StatusCode, Json<ApiResponse>) {
+        let status_code = status.unwrap_or(StatusCode::BAD_REQUEST); // Use provided status or default to BAD_REQUEST
         (
-            StatusCode::BAD_REQUEST, // 400 Bad Request
-            Json(ApiResponse {
-                success: false,
-                message: message.to_string(),
-                data: None,
-            }),
-        )
-    }
-
-    // Not Found response
-    pub fn not_found(message: &str) -> (StatusCode, Json<ApiResponse<()>>) {
-        (
-            StatusCode::NOT_FOUND, // 404 Not Found
-            Json(ApiResponse {
-                success: false,
-                message: message.to_string(),
-                data: None,
-            }),
-        )
-    }
-
-    // Internal Server Error
-    pub fn internal_error(message: &str) -> (StatusCode, Json<ApiResponse<()>>) {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR, // 500 Internal Server Error
-            Json(ApiResponse {
-                success: false,
-                message: message.to_string(),
-                data: None,
-            }),
-        )
-    }
-
-    // Unauthorized response
-    pub fn unauthorized(message: &str) -> (StatusCode, Json<ApiResponse<()>>) {
-        (
-            StatusCode::UNAUTHORIZED, // 401 Unauthorized
-            Json(ApiResponse {
-                success: false,
-                message: message.to_string(),
-                data: None,
-            }),
-        )
-    }
-
-    // Forbidden response
-    pub fn forbidden(message: &str) -> (StatusCode, Json<ApiResponse<()>>) {
-        (
-            StatusCode::FORBIDDEN, // 403 Forbidden
+            status_code,
             Json(ApiResponse {
                 success: false,
                 message: message.to_string(),
