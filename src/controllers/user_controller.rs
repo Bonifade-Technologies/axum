@@ -6,7 +6,7 @@ use crate::{models::user::User, views::response::ApiResponse};
 pub fn routes() -> Router {
     Router::new()
         .route("/", get(index))
-        .route("/show/:id", get(show))
+        .route("/:id", get(show))
 }
 
 async fn index() -> (StatusCode, Json<ApiResponse>) {
