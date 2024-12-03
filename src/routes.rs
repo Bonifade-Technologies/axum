@@ -16,7 +16,12 @@ async fn index() -> &'static str {
 // Example route: Simulate an error
 async fn simulate_error(Path(code): Path<u16>) -> (StatusCode, Json<ApiResponse>) {
     match code {
+        422 => ApiResponse::failure(
+            "Unprocessable entity",
+            Some(StatusCode::UNPROCESSABLE_ENTITY),
+        ),
         400 => ApiResponse::failure("Bad request", Some(StatusCode::BAD_REQUEST)),
+        404 => ApiResponse::failure("Not found", Some(StatusCode::NOT_FOUND)),
         500 => ApiResponse::failure(
             "Internal server error",
             Some(StatusCode::INTERNAL_SERVER_ERROR),
