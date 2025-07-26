@@ -81,11 +81,17 @@ cargo run
 
 ## Using dotenv with once_cell for Environment Variables
 
-To manage environment variables easily, you can use the [`dotenv`](https://crates.io/crates/dotenv) crate together with [`once_cell`](https://crates.io/crates/once_cell`). This allows you to load variables from a `.env` file and initialize them as static variables.
+To manage environment variables easily, you can use the [`dotenv`](https://crates.io/crates/dotenvy) crate together with [`once_cell`](https://crates.io/crates/once_cell`). This allows you to load variables from a `.env` file and initialize them as static variables.
 
 ### 1. Add dependencies
 
 In your `Cargo.toml`:
+
+```toml
+[dependencies]
+dotenv = "0.15"
+once_cell = "1.21"
+```
 
 ```toml
 [dependencies]
