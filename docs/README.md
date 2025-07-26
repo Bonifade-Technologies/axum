@@ -225,3 +225,47 @@ For the full list, see the [axum::http::StatusCode docs](https://docs.rs/http/la
 ---
 
 For more details, see the code in `src/lib.rs` and `src/main.rs`.
+
+## Group Routing and Fallback (Catch-All) Handler in Axum
+
+### Group Routing
+
+You can organize your routes into groups (sub-routers) for better structure. For example, to group all sample routes under `/samples`:
+
+```rust
+use crate::routes::samples::samples_router;
+use axum::{Router, routing::get};
+
+pub fn app_router() -> Router {
+    Router::new()
+        .route("/", get(hello_world))
+        .nest("/samples", samples_router())
+}
+```
+
+- `.nest("/samples", samples_router())` mounts all routes from `samples_router()` under the `/samples` path.
+
+### Fallback (Catch-All) Handler
+
+To handle any route that is not defined, use the `.fallback()` method:
+
+```rust
+async fn not_found() -> impl axum::response::IntoResponse {
+    api_response::failure(
+        Some("Route not found"),
+        Some("The requested endpoint does not exist."),
+        None,
+    )
+}
+
+pub fn app_router() -> Router {
+    Router::new()
+        .route("/", get(hello_world))
+        .nest("/samples", samples_router())
+        .fallback(not_found)
+}
+```
+
+- Any request to an undefined route will trigger the `not_found` handler, returning a JSON error response.
+
+This approach keeps your API organized and user-friendly, always returning a clear message for unknown endpoints.
