@@ -33,6 +33,7 @@ impl MigrationTrait for Migration {
 
 #[derive(Iden)]
 enum User {
+    #[iden = "users"]
     Table,
     Id,
     Name,
