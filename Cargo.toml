@@ -1,7 +1,11 @@
+[workspace]
+members = [".", "entity", "migration"]
+
 [package]
 name = "axum-template"
 version = "0.1.0"
 edition = "2021"
+
 
 [dependencies]
 axum = { version = "0.8.4", features = ["multipart"] }
