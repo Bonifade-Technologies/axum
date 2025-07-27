@@ -1,4 +1,5 @@
 use crate::routes::handlers;
+use sea_orm::{Database, DatabaseConnection};
 
 pub mod config;
 pub mod controllers;
@@ -12,11 +13,10 @@ pub async fn run() {
     let app = handlers::app_router();
 
     // Connect to the database using SeaORM
-    use sea_orm::{Database, DatabaseConnection};
+
     let db: DatabaseConnection = Database::connect(&*crate::config::database::DB_URL)
         .await
         .expect("Failed to connect to database");
-    // You can now pass `db` to your handlers as needed (e.g., via app state)
 
     // Use APP_URL and APP_PORT static variables from config/database.rs
     let addr = format!(
