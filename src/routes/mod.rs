@@ -5,11 +5,11 @@ use crate::{routes::samples::samples_router, routes::users::users_router, utils:
 use axum::{http::StatusCode, routing::get, Router};
 use sea_orm::DatabaseConnection;
 
-pub fn app_router(db: DatabaseConnection) -> Router {
+pub fn app_router(database: DatabaseConnection) -> Router {
     Router::new()
         .route("/", get(hello_world))
         .nest("/samples", samples_router())
-        .nest("/users", users_router(db))
+        .nest("/users", users_router().with_state(database.clone()))
 }
 
 async fn hello_world() -> impl axum::response::IntoResponse {

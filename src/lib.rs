@@ -1,17 +1,15 @@
-use sea_orm::{Database, DatabaseConnection};
+use sea_orm::DatabaseConnection;
 
 pub mod config;
 pub mod controllers;
+pub mod database;
 pub mod models;
+pub mod resources;
 pub mod routes;
 pub mod utils;
 pub mod views;
 
-pub async fn run() {
-    // Connect to the database using SeaORM
-    let db: DatabaseConnection = Database::connect(&*crate::config::database::DB_URL)
-        .await
-        .expect("Failed to connect to database");
+pub async fn run(db: DatabaseConnection) {
     // import the main route file here
     let app = routes::app_router(db);
 
