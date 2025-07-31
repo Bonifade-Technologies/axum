@@ -1,10 +1,10 @@
-use redis::{AsyncCommands, Client};
+use crate::config::redis::redis_client;
+use redis::AsyncCommands;
 use serde::{de::DeserializeOwned, Serialize};
 
 const CACHE_TTL_SECONDS: u64 = 60 * 60 * 24;
 
 pub async fn get_or_set_cache<T, F, Fut>(
-    client: &Client,
     key: &str,
     query_params: &str,
     fetch_fn: F,
@@ -14,6 +14,7 @@ where
     F: FnOnce() -> Fut,
     Fut: std::future::Future<Output = T>,
 {
+    let client = redis_client();
     let mut conn = client.get_multiplexed_async_connection().await?;
     let cache_key = format!("{}:{}", key, query_params);
 
@@ -37,14 +38,21 @@ where
     Ok(value)
 }
 
-pub async fn invalidate_cache_by_prefix(client: &Client, prefix: &str) -> redis::RedisResult<()> {
-    // FIXED: Use async connection method instead of sync get_connection()
+pub async fn invalidate_cache_by_prefix(prefix: &str) -> redis::RedisResult<()> {
+    let client = redis_client();
     let mut conn = client.get_multiplexed_async_connection().await?;
-    let pattern = format!("{}*", prefix);
 
-    let keys: Vec<String> = conn.keys(pattern).await?;
-    if !keys.is_empty() {
-        let _: () = conn.del(keys).await?;
+    // Get ALL keys first
+    let all_keys: Vec<String> = conn.keys("*").await?;
+
+    // Filter keys that start with the prefix
+    let matching_keys: Vec<String> = all_keys
+        .into_iter()
+        .filter(|key| key.starts_with(prefix))
+        .collect();
+
+    if !matching_keys.is_empty() {
+        let _: () = conn.del(matching_keys).await?;
     }
     Ok(())
 }

@@ -1,10 +1,8 @@
-use crate::config::redis::redis_client;
 use crate::database::users as user;
 use crate::dtos::auth_dto::SignupDto;
 use crate::extractors::json_extractor::ValidatedJson;
 use crate::resources::user_resource::UserResource;
 use crate::utils::api_response;
-use crate::utils::cache::get_or_set_cache;
 use crate::utils::cache::invalidate_cache_by_prefix;
 use crate::utils::query_params::QueryParams;
 
@@ -42,11 +40,12 @@ pub async fn create_user(
         deleted_at: Set(None),
     };
     let res = user.insert(&db).await;
-    // Invalidate user_list cache after create
-    let redis = redis_client();
-    let _ = invalidate_cache_by_prefix(&redis, "user_list").await;
+
     match res {
         Ok(user) => {
+            // Invalidate user caches after create
+            let _ = invalidate_cache_by_prefix("user").await;
+
             let resource = UserResource::from(&user);
             api_response::success(
                 Some("User created"),
@@ -67,21 +66,19 @@ pub async fn get_user(
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     use crate::utils::cache::get_or_set_cache;
-    let redis = redis_client();
     let cache_key = "user";
     let query_params = &id;
+
     let fetch_fn = || async {
-        user::Entity::find_by_id(id.clone())
-            .one(&db)
-            .await
-            .ok()
-            .flatten()
-    };
-    match get_or_set_cache(&redis, cache_key, query_params, fetch_fn).await {
-        Ok(Some(user)) => {
-            let resource = UserResource::from(&user);
-            api_response::success(Some("User found"), Some(resource), None)
+        match user::Entity::find_by_id(id.clone()).one(&db).await {
+            Ok(Some(user)) => Some(UserResource::from(&user)),
+            Ok(None) => None,
+            Err(_) => None,
         }
+    };
+
+    match get_or_set_cache(cache_key, query_params, fetch_fn).await {
+        Ok(Some(resource)) => api_response::success(Some("User found"), Some(resource), None),
         Ok(None) => api_response::failure(
             Some("User not found"),
             None::<String>,
@@ -101,7 +98,7 @@ pub async fn list_users(
 ) -> impl IntoResponse {
     use crate::utils::cache::get_or_set_cache;
     use sea_orm::{PaginatorTrait, QueryFilter, QueryOrder};
-    let redis = redis_client();
+
     let page = params.page.unwrap_or(1);
     let per_page = params.per_page.unwrap_or(20);
     let sort_by = params.sort_by.unwrap_or_else(|| "created_at".to_string());
@@ -149,7 +146,7 @@ pub async fn list_users(
         "search": search
     })
     .to_string();
-    let cache_key = "user_list";
+    let cache_key = "user_list"; // This creates: user_list:{json_params}
     let fetch_fn = || async {
         let paginator = query.paginate(&db, per_page);
         let total = paginator.num_items().await.unwrap_or(0);
@@ -161,7 +158,7 @@ pub async fn list_users(
             "pagination": pagination
         })
     };
-    match get_or_set_cache(&redis, cache_key, &query_params, fetch_fn).await {
+    match get_or_set_cache(cache_key, &query_params, fetch_fn).await {
         Ok(data) => api_response::success(Some("All users"), Some(data), None),
         Err(e) => api_response::failure(
             Some("Failed to fetch users"),
@@ -170,14 +167,13 @@ pub async fn list_users(
         ),
     }
 }
-
 pub async fn update_user(
     State(db): State<DatabaseConnection>,
     Path(id): Path<String>,
     Json(payload): Json<UserUpdateRequest>,
 ) -> impl IntoResponse {
     let res = user::Entity::find_by_id(id.clone()).one(&db).await;
-    let redis = redis_client();
+
     match res {
         Ok(Some(user)) => {
             let mut active: user::ActiveModel = user.into();
@@ -195,11 +191,12 @@ pub async fn update_user(
             }
             active.updated_at = Set(chrono::Utc::now().naive_utc());
             let update_res = active.update(&db).await;
-            // Invalidate user_list and user cache after update
-            let _ = invalidate_cache_by_prefix(&redis, "user_list").await;
-            let _ = invalidate_cache_by_prefix(&redis, &format!("user:{}", id)).await;
+
             match update_res {
                 Ok(user) => {
+                    // Invalidate all user caches after update
+                    let _ = invalidate_cache_by_prefix("user").await;
+
                     let resource = UserResource::from(&user);
                     api_response::success(Some("User updated"), Some(resource), None)
                 }
@@ -228,17 +225,17 @@ pub async fn delete_user(
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     let res = user::Entity::find_by_id(id.clone()).one(&db).await;
-    let redis = redis_client();
     match res {
         Ok(Some(user)) => {
             let mut active: user::ActiveModel = user.into();
             active.deleted_at = Set(Some(chrono::Utc::now().naive_utc()));
             let delete_res = active.update(&db).await;
-            // Invalidate user_list and user cache after delete
-            let _ = invalidate_cache_by_prefix(&redis, "user_list").await;
-            let _ = invalidate_cache_by_prefix(&redis, &format!("user:{}", id)).await;
+
             match delete_res {
                 Ok(user) => {
+                    // Invalidate all user caches after delete
+                    let _ = invalidate_cache_by_prefix("user").await;
+
                     let resource = UserResource::from(&user);
                     api_response::success(Some("User deleted"), Some(resource), None)
                 }
