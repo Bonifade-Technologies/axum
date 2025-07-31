@@ -1,3 +1,6 @@
+use crate::database::users as user;
+use crate::dtos::auth_dto::SignupDto;
+use crate::extractors::json_extractor::ValidatedJson;
 use crate::resources::user_resource::UserResource;
 use crate::utils::api_response;
 use axum::{
@@ -10,14 +13,11 @@ use cuid2;
 use sea_orm::{ActiveModelTrait, DatabaseConnection, EntityTrait, Set};
 use serde::{Deserialize, Serialize};
 
-// Add this import if your entity module is in the crate root or adjust the path as needed
-use crate::database::users as user;
-
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct UserCreateRequest {
     pub name: String,
     pub email: String,
-    pub phone: Option<String>,
+    pub phone: String,
     pub password: String,
 }
 
@@ -31,14 +31,14 @@ pub struct UserUpdateRequest {
 
 pub async fn create_user(
     State(db): State<DatabaseConnection>,
-    Json(payload): Json<UserCreateRequest>,
+    ValidatedJson(payload): ValidatedJson<SignupDto>,
 ) -> impl IntoResponse {
     let now = chrono::Utc::now().naive_utc();
     let user = user::ActiveModel {
         id: Set(cuid2::create_id()),
         name: Set(payload.name),
         email: Set(payload.email),
-        phone: Set(payload.phone),
+        phone: Set(Some(payload.phone)),
         password: Set(payload.password),
         created_at: Set(now),
         updated_at: Set(now),
