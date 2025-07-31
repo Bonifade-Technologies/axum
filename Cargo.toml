@@ -23,4 +23,3 @@ cuid2 = "0.1.4"
 
 migration = { path = "./migration" }
 validator = { version = "0.20.0", features = ["derive"] }
-async-trait = "0.1.88"

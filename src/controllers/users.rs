@@ -3,8 +3,10 @@ use crate::dtos::auth_dto::SignupDto;
 use crate::extractors::json_extractor::ValidatedJson;
 use crate::resources::user_resource::UserResource;
 use crate::utils::api_response;
+use crate::utils::query_params::QueryParams;
+
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     Json,
@@ -12,14 +14,6 @@ use axum::{
 use cuid2;
 use sea_orm::{ActiveModelTrait, DatabaseConnection, EntityTrait, Set};
 use serde::{Deserialize, Serialize};
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct UserCreateRequest {
-    pub name: String,
-    pub email: String,
-    pub phone: String,
-    pub password: String,
-}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct UserUpdateRequest {
@@ -85,12 +79,72 @@ pub async fn get_user(
     }
 }
 
-pub async fn list_users(State(db): State<DatabaseConnection>) -> impl IntoResponse {
-    let res = user::Entity::find().all(&db).await;
-    match res {
+pub async fn list_users(
+    State(db): State<DatabaseConnection>,
+    Query(params): Query<QueryParams>,
+) -> impl IntoResponse {
+    use sea_orm::{PaginatorTrait, QueryFilter, QueryOrder};
+
+    let page = params.page.unwrap_or(1);
+    let per_page = params.per_page.unwrap_or(20);
+    let sort_by = params.sort_by.unwrap_or_else(|| "created_at".to_string());
+    let sort_order = params.sort_order.unwrap_or_else(|| "desc".to_string());
+    let search = params.search.clone();
+
+    let mut query = user::Entity::find();
+
+    // Search by name or email if search param is provided
+    if let Some(ref s) = search {
+        use sea_orm::sea_query::Expr;
+        let search_term = format!("%{}%", s.to_lowercase());
+        query = query.filter(
+            Expr::cust("LOWER(name)")
+                .like(&search_term)
+                .or(Expr::cust("LOWER(email)").like(&search_term)),
+        );
+    }
+
+    // Sorting
+    query = match sort_by.as_str() {
+        "name" => {
+            if sort_order == "asc" {
+                query.order_by_asc(user::Column::Name)
+            } else {
+                query.order_by_desc(user::Column::Name)
+            }
+        }
+        "email" => {
+            if sort_order == "asc" {
+                query.order_by_asc(user::Column::Email)
+            } else {
+                query.order_by_desc(user::Column::Email)
+            }
+        }
+        "created_at" | _ => {
+            if sort_order == "asc" {
+                query.order_by_asc(user::Column::CreatedAt)
+            } else {
+                query.order_by_desc(user::Column::CreatedAt)
+            }
+        }
+    };
+
+    let paginator = query.paginate(&db, per_page);
+    let total = paginator.num_items().await.unwrap_or(0);
+    let users = paginator.fetch_page(page - 1).await;
+
+    match users {
         Ok(users) => {
             let resources: Vec<UserResource> = users.iter().map(UserResource::from).collect();
-            api_response::success(Some("All users"), Some(resources), None)
+            let pagination = crate::utils::api_response::pagination_info(page, per_page, total);
+            api_response::success(
+                Some("All users"),
+                Some(serde_json::json!({
+                    "users": resources,
+                    "pagination": pagination
+                })),
+                None,
+            )
         }
         Err(e) => api_response::failure(
             Some("Failed to fetch users"),

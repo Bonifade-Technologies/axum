@@ -1,3 +1,89 @@
+## Validation Process for DTOs (Signup, Login, etc.)
+
+This project uses the [`validator`](https://crates.io/crates/validator) crate to validate incoming request data (DTOs) for endpoints like signup and login.
+
+### How Validation Works
+
+- Each DTO (e.g., `SignupDto`, `LoginDto`) derives or implements the `Validate` trait.
+- Field-level validation is specified using `#[validate(...)]` attributes (e.g., `length`, `email`).
+- Custom validation logic (e.g., password confirmation, unique email) is implemented using custom functions or by manually checking in the handler.
+- If validation fails, the API returns a response in the format:
+
+```json
+{
+  "success": false,
+  "message": "Validation failed",
+  "errors": {
+    "field": "error message"
+  }
+}
+```
+
+### Example: SignupDto
+
+```rust
+#[derive(Debug, Deserialize, Serialize, Validate)]
+pub struct SignupDto {
+    #[validate(length(min = 1, message = "name is required"))]
+    pub name: String,
+
+    #[validate(email(message = "invalid email"), custom(function = "validate_unique_email"))]
+    #[validate(length(min = 1, message = "email is required"))]
+    pub email: String,
+
+    #[validate(length(min = 6, message = "password must be at least 6 characters"))]
+    pub password: String,
+
+    #[validate(length(min = 6, message = "password confirmation is required"))]
+    pub password_confirmation: String,
+
+    #[validate(length(min = 10, max = 15, message = "phone must be between 10 and 15 characters"))]
+    pub phone: String,
+}
+```
+
+#### Custom Validation Example
+
+```rust
+fn validate_unique_email(email: &str) -> Result<(), validator::ValidationError> {
+    // Replace with async DB check in handler for real uniqueness
+    if email == "taken@example.com" {
+        return Err(validator::ValidationError::new("email_taken")
+            .with_message("email is already taken".into()));
+    }
+    Ok(())
+}
+```
+
+#### Password Confirmation
+
+Password and password_confirmation are checked for equality in a custom `Validate` implementation or in the handler.
+
+#### Unique Email (Async DB Check)
+
+Because database checks are async, unique email validation is performed in the handler after DTO validation:
+
+```rust
+// In your handler (pseudo-code):
+if email_exists_in_db(&dto.email).await {
+    return api_response::failure(
+        Some("Validation failed"),
+        Some({ "email": "email is already taken" }),
+        Some(StatusCode::UNPROCESSABLE_ENTITY),
+    );
+}
+```
+
+### Error Response
+
+All validation errors are returned in the standard API error format, with field-level error messages.
+
+### See Also
+
+- [`validator` crate docs](https://docs.rs/validator/)
+- `src/dtos/auth_dto.rs` for DTO definitions
+- `src/extractors/json_extractor.rs` for extractor logic
+
 # Project Structure Documentation
 
 This project was refactored to move most of the application logic from `main.rs` into the library crate (`lib.rs`). This makes the codebase more modular, testable, and reusable.

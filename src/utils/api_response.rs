@@ -1,6 +1,23 @@
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use serde::Serialize;
+#[derive(Serialize)]
+pub struct Pagination {
+    pub page: u64,
+    pub per_page: u64,
+    pub total: u64,
+    pub total_pages: u64,
+}
+
+pub fn pagination_info(page: u64, per_page: u64, total: u64) -> Pagination {
+    let total_pages = (total as f64 / per_page as f64).ceil() as u64;
+    Pagination {
+        page,
+        per_page,
+        total,
+        total_pages,
+    }
+}
 
 #[derive(Serialize)]
 pub struct SuccessResponse<T: Serialize> {

@@ -358,7 +358,6 @@ dependencies = [
 name = "axum-template"
 version = "0.1.0"
 dependencies = [
- "async-trait",
  "axum",
  "chrono",
  "cuid2",
