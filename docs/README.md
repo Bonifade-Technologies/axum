@@ -355,3 +355,131 @@ pub fn app_router() -> Router {
 - Any request to an undefined route will trigger the `not_found` handler, returning a JSON error response.
 
 This approach keeps your API organized and user-friendly, always returning a clear message for unknown endpoints.
+
+## SeaORM Usage: Pagination, Sorting, and Case-Insensitive Search
+
+This project uses [SeaORM](https://www.sea-ql.org/SeaORM/) as the ORM for database access. Below are some key patterns and customizations used in the codebase:
+
+### Pagination and Sorting
+
+The user listing endpoint supports pagination and sorting using SeaORM's paginator and order_by methods:
+
+```rust
+let paginator = query.paginate(&db, per_page);
+let total = paginator.num_items().await.unwrap_or(0);
+let users = paginator.fetch_page(page - 1).await;
+
+// Sorting
+query = match sort_by.as_str() {
+    "name" => {
+        if sort_order == "asc" {
+            query.order_by_asc(user::Column::Name)
+        } else {
+            query.order_by_desc(user::Column::Name)
+        }
+    }
+    "email" => {
+        if sort_order == "asc" {
+            query.order_by_asc(user::Column::Email)
+        } else {
+            query.order_by_desc(user::Column::Email)
+        }
+    }
+    _ => {
+        if sort_order == "asc" {
+            query.order_by_asc(user::Column::CreatedAt)
+        } else {
+            query.order_by_desc(user::Column::CreatedAt)
+        }
+    }
+};
+```
+
+### Case-Insensitive Search (Postgres)
+
+Postgres `LIKE` is case-sensitive by default. To enable case-insensitive search for fields like `name` and `email`, this project uses custom SQL expressions with the `LOWER()` function:
+
+```rust
+use sea_orm::sea_query::Expr;
+let search_term = format!("%{}%", s.to_lowercase());
+query = query.filter(
+    Expr::cust("LOWER(name)").like(&search_term)
+        .or(Expr::cust("LOWER(email)").like(&search_term)),
+);
+```
+
+This ensures that both the column data and the search term are compared in lowercase, providing a user-friendly search experience.
+
+### References
+
+- See `src/controllers/users.rs` for the full implementation of the user listing endpoint.
+- See `src/utils/api_response.rs` for pagination info and response helpers.
+
+---
+
+# Redis Caching for User List Endpoint
+
+This project uses Redis for caching the user list endpoint with support for query params, a 24-hour TTL, and efficient cache invalidation on create, update, or delete events.
+
+## Redis Configuration
+
+- Redis config is managed in `src/config/redis.rs`:
+
+```rust
+use once_cell::sync::Lazy;
+use redis::Client;
+use std::env;
+
+pub static REDIS_URL: Lazy<String> = Lazy::new(|| {
+    env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1/".to_string())
+});
+
+pub fn redis_client() -> Client {
+    Client::open(REDIS_URL.as_str()).expect("Failed to create Redis client")
+}
+```
+
+- Set your Redis URL in `.env`:
+
+```
+REDIS_URL=redis://127.0.0.1/
+```
+
+## Caching Utility
+
+- The cache utility is in `src/utils/cache.rs` and supports:
+  - Caching any serializable value with a TTL of 24 hours
+  - Cache key includes query params for correct pagination/sorting/search
+  - Automatic cache invalidation by prefix (e.g., after create/update/delete)
+
+```rust
+use redis::{AsyncCommands, Client};
+use serde::{Serialize, de::DeserializeOwned};
+
+const CACHE_TTL_SECONDS: usize = 60 * 60 * 24; // 24 hours
+
+pub async fn get_or_set_cache<T, F, Fut>(
+    client: &Client,
+    key: &str,
+    query_params: &str,
+    fetch_fn: F,
+) -> redis::RedisResult<T>
+where
+    T: Serialize + DeserializeOwned + Clone,
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = T>,
+{
+    // ... see code for details ...
+}
+
+pub async fn invalidate_cache_by_prefix(client: &Client, prefix: &str) -> redis::RedisResult<()> {
+    // ... see code for details ...
+}
+```
+
+## Usage Pattern
+
+- When listing users, use `get_or_set_cache` with a cache key and the query params stringified (e.g., page, per_page, search, sort_by, sort_order).
+- On create, update, or delete, call `invalidate_cache_by_prefix` with the cache key prefix to clear all related cached pages.
+
+---
