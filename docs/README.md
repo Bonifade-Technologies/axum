@@ -483,3 +483,64 @@ pub async fn invalidate_cache_by_prefix(client: &Client, prefix: &str) -> redis:
 - On create, update, or delete, call `invalidate_cache_by_prefix` with the cache key prefix to clear all related cached pages.
 
 ---
+
+# Redis Caching: Usage in User Endpoints
+
+This project uses Redis to cache user data for performance and scalability. Caching is implemented for both the user list and single user endpoints, with automatic invalidation on create, update, and delete events.
+
+## How Caching Works
+
+- **User List Endpoint**: Results are cached per unique combination of query params (pagination, search, sort, etc.) for 24 hours.
+- **Single User Endpoint**: Each user's data is cached by their ID for 24 hours.
+- **Cache Invalidation**: On any create, update, or delete, all user-related caches are invalidated to ensure fresh data.
+
+## Example Usage
+
+### List Users (with cache)
+
+```rust
+let query_params = serde_json::json!({
+    "page": page,
+    "per_page": per_page,
+    "sort_by": sort_by,
+    "sort_order": sort_order,
+    "search": search
+}).to_string();
+let cache_key = "user_list";
+let fetch_fn = || async {
+    // ...fetch from DB and build response...
+};
+let data = get_or_set_cache(cache_key, &query_params, fetch_fn).await;
+```
+
+### Get Single User (with cache)
+
+```rust
+let cache_key = "user";
+let query_params = &id;
+let fetch_fn = || async {
+    // ...fetch user from DB and map to UserResource...
+};
+let data = get_or_set_cache(cache_key, query_params, fetch_fn).await;
+```
+
+### Invalidate Cache on Write
+
+```rust
+// After create, update, or delete:
+let _ = invalidate_cache_by_prefix("user").await;
+```
+
+## Where to Find the Code
+
+- `src/utils/cache.rs`: Cache logic and helpers
+- `src/controllers/users.rs`: Example usage in handlers
+- `src/config/redis.rs`: Redis connection config
+
+## Notes
+
+- All cached data is serialized as JSON for compatibility and easy debugging.
+- The cache key always includes query params for list endpoints, and user ID for single user endpoints.
+- Invalidation is done by prefix, so all related cache entries are cleared on any write.
+
+---
