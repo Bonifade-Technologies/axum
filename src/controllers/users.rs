@@ -13,7 +13,7 @@ use axum::{
     Json,
 };
 use cuid2;
-use sea_orm::{ActiveModelTrait, DatabaseConnection, EntityTrait, Set};
+use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -53,9 +53,9 @@ pub async fn create_user(
                 Some(StatusCode::CREATED),
             )
         }
-        Err(e) => api_response::failure(
-            Some("Failed to create user"),
-            Some(e.to_string()),
+        Err(_e) => api_response::failure(
+            Some("Server error"),
+            Some("Failed to create user".to_string()),
             Some(StatusCode::INTERNAL_SERVER_ERROR),
         ),
     }
@@ -70,7 +70,11 @@ pub async fn get_user(
     let query_params = &id;
 
     let fetch_fn = || async {
-        match user::Entity::find_by_id(id.clone()).one(&db).await {
+        match user::Entity::find_by_id(id.clone())
+            .filter(user::Column::DeletedAt.is_null())
+            .one(&db)
+            .await
+        {
             Ok(Some(user)) => Some(UserResource::from(&user)),
             Ok(None) => None,
             Err(_) => None,
@@ -97,14 +101,17 @@ pub async fn list_users(
     Query(params): Query<QueryParams>,
 ) -> impl IntoResponse {
     use crate::utils::cache::get_or_set_cache;
-    use sea_orm::{PaginatorTrait, QueryFilter, QueryOrder};
+    use sea_orm::{PaginatorTrait, QueryOrder};
 
     let page = params.page.unwrap_or(1);
     let per_page = params.per_page.unwrap_or(20);
     let sort_by = params.sort_by.unwrap_or_else(|| "created_at".to_string());
     let sort_order = params.sort_order.unwrap_or_else(|| "desc".to_string());
     let search = params.search.clone();
-    let mut query = user::Entity::find();
+
+    // Only get users where deleted_at is null (active users)
+    let mut query = user::Entity::find().filter(user::Column::DeletedAt.is_null());
+
     if let Some(ref s) = search {
         use sea_orm::sea_query::Expr;
         let search_term = format!("%{}%", s.to_lowercase());
@@ -114,6 +121,7 @@ pub async fn list_users(
                 .or(Expr::cust("LOWER(email)").like(&search_term)),
         );
     }
+
     query = match sort_by.as_str() {
         "name" => {
             if sort_order == "asc" {
@@ -137,6 +145,7 @@ pub async fn list_users(
             }
         }
     };
+
     // Serialize query params for cache key
     let query_params = serde_json::json!({
         "page": page,
@@ -159,7 +168,7 @@ pub async fn list_users(
         })
     };
     match get_or_set_cache(cache_key, &query_params, fetch_fn).await {
-        Ok(data) => api_response::success(Some("All users"), Some(data), None),
+        Ok(data) => api_response::success(Some("All active users"), Some(data), None),
         Err(e) => api_response::failure(
             Some("Failed to fetch users"),
             Some(e.to_string()),
@@ -167,12 +176,97 @@ pub async fn list_users(
         ),
     }
 }
+
+pub async fn list_deleted_users(
+    State(db): State<DatabaseConnection>,
+    Query(params): Query<QueryParams>,
+) -> impl IntoResponse {
+    use crate::utils::cache::get_or_set_cache;
+    use sea_orm::{PaginatorTrait, QueryOrder};
+
+    let page = params.page.unwrap_or(1);
+    let per_page = params.per_page.unwrap_or(20);
+    let sort_by = params.sort_by.unwrap_or_else(|| "deleted_at".to_string());
+    let sort_order = params.sort_order.unwrap_or_else(|| "desc".to_string());
+    let search = params.search.clone();
+
+    // Only get users where deleted_at is not null (deleted users)
+    let mut query = user::Entity::find().filter(user::Column::DeletedAt.is_not_null());
+
+    if let Some(ref s) = search {
+        use sea_orm::sea_query::Expr;
+        let search_term = format!("%{}%", s.to_lowercase());
+        query = query.filter(
+            Expr::cust("LOWER(name)")
+                .like(&search_term)
+                .or(Expr::cust("LOWER(email)").like(&search_term)),
+        );
+    }
+
+    query = match sort_by.as_str() {
+        "name" => {
+            if sort_order == "asc" {
+                query.order_by_asc(user::Column::Name)
+            } else {
+                query.order_by_desc(user::Column::Name)
+            }
+        }
+        "email" => {
+            if sort_order == "asc" {
+                query.order_by_asc(user::Column::Email)
+            } else {
+                query.order_by_desc(user::Column::Email)
+            }
+        }
+        "deleted_at" | _ => {
+            if sort_order == "asc" {
+                query.order_by_asc(user::Column::DeletedAt)
+            } else {
+                query.order_by_desc(user::Column::DeletedAt)
+            }
+        }
+    };
+
+    // Serialize query params for cache key
+    let query_params = serde_json::json!({
+        "page": page,
+        "per_page": per_page,
+        "sort_by": sort_by,
+        "sort_order": sort_order,
+        "search": search
+    })
+    .to_string();
+    let cache_key = "deleted_user_list";
+    let fetch_fn = || async {
+        let paginator = query.paginate(&db, per_page);
+        let total = paginator.num_items().await.unwrap_or(0);
+        let users = paginator.fetch_page(page - 1).await.unwrap_or_default();
+        let resources: Vec<UserResource> = users.iter().map(UserResource::from).collect();
+        let pagination = crate::utils::api_response::pagination_info(page, per_page, total);
+        serde_json::json!({
+            "users": resources,
+            "pagination": pagination
+        })
+    };
+    match get_or_set_cache(cache_key, &query_params, fetch_fn).await {
+        Ok(data) => api_response::success(Some("All deleted users"), Some(data), None),
+        Err(e) => api_response::failure(
+            Some("Failed to fetch deleted users"),
+            Some(e.to_string()),
+            Some(StatusCode::INTERNAL_SERVER_ERROR),
+        ),
+    }
+}
+
 pub async fn update_user(
     State(db): State<DatabaseConnection>,
     Path(id): Path<String>,
     Json(payload): Json<UserUpdateRequest>,
 ) -> impl IntoResponse {
-    let res = user::Entity::find_by_id(id.clone()).one(&db).await;
+    let res = user::Entity::find_by_id(id.clone())
+        .filter(user::Column::DeletedAt.is_null())
+        .one(&db)
+        .await;
 
     match res {
         Ok(Some(user)) => {
@@ -224,7 +318,10 @@ pub async fn delete_user(
     State(db): State<DatabaseConnection>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
-    let res = user::Entity::find_by_id(id.clone()).one(&db).await;
+    let res = user::Entity::find_by_id(id.clone())
+        .filter(user::Column::DeletedAt.is_null())
+        .one(&db)
+        .await;
     match res {
         Ok(Some(user)) => {
             let mut active: user::ActiveModel = user.into();
@@ -248,6 +345,89 @@ pub async fn delete_user(
         }
         Ok(None) => api_response::failure(
             Some("User not found"),
+            None::<String>,
+            Some(StatusCode::NOT_FOUND),
+        ),
+        Err(e) => api_response::failure(
+            Some("Failed to fetch user"),
+            Some(e.to_string()),
+            Some(StatusCode::INTERNAL_SERVER_ERROR),
+        ),
+    }
+}
+
+pub async fn force_delete_user(
+    State(db): State<DatabaseConnection>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let res = user::Entity::find_by_id(id.clone()).one(&db).await;
+    match res {
+        Ok(Some(_user)) => {
+            let delete_res = user::Entity::delete_by_id(id.clone()).exec(&db).await;
+
+            match delete_res {
+                Ok(_) => {
+                    // Invalidate all user caches after force delete
+                    let _ = invalidate_cache_by_prefix("user").await;
+
+                    api_response::success(
+                        Some("User permanently deleted"),
+                        Some(format!("User with ID {} has been permanently deleted", id)),
+                        None,
+                    )
+                }
+                Err(e) => api_response::failure(
+                    Some("Failed to permanently delete user"),
+                    Some(e.to_string()),
+                    Some(StatusCode::INTERNAL_SERVER_ERROR),
+                ),
+            }
+        }
+        Ok(None) => api_response::failure(
+            Some("User not found"),
+            None::<String>,
+            Some(StatusCode::NOT_FOUND),
+        ),
+        Err(e) => api_response::failure(
+            Some("Failed to fetch user"),
+            Some(e.to_string()),
+            Some(StatusCode::INTERNAL_SERVER_ERROR),
+        ),
+    }
+}
+
+pub async fn restore_user(
+    State(db): State<DatabaseConnection>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let res = user::Entity::find_by_id(id.clone())
+        .filter(user::Column::DeletedAt.is_not_null())
+        .one(&db)
+        .await;
+    match res {
+        Ok(Some(user)) => {
+            let mut active: user::ActiveModel = user.into();
+            active.deleted_at = Set(None);
+            active.updated_at = Set(chrono::Utc::now().naive_utc());
+            let restore_res = active.update(&db).await;
+
+            match restore_res {
+                Ok(user) => {
+                    // Invalidate all user caches after restore
+                    let _ = invalidate_cache_by_prefix("user").await;
+
+                    let resource = UserResource::from(&user);
+                    api_response::success(Some("User restored"), Some(resource), None)
+                }
+                Err(e) => api_response::failure(
+                    Some("Failed to restore user"),
+                    Some(e.to_string()),
+                    Some(StatusCode::INTERNAL_SERVER_ERROR),
+                ),
+            }
+        }
+        Ok(None) => api_response::failure(
+            Some("User not found or not deleted"),
             None::<String>,
             Some(StatusCode::NOT_FOUND),
         ),
