@@ -18,6 +18,9 @@ pub struct SignupDto {
     #[validate(length(min = 6, message = "password must be at least 6 characters"))]
     pub password: String,
 
+    #[validate(must_match(other = "password", message = "passwords must match"))]
+    pub password_confirmation: String,
+
     #[validate(length(
         min = 10,
         max = 15,
@@ -32,6 +35,7 @@ impl Default for SignupDto {
             name: String::new(),
             email: String::new(),
             password: String::new(),
+            password_confirmation: String::new(),
             phone: String::new(),
         }
     }

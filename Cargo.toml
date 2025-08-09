@@ -23,3 +23,5 @@ cuid2 = "0.1.4"
 
 migration = { path = "./migration" }
 validator = { version = "0.20.0", features = ["derive"] }
+bcrypt = "0.17.0"
+jsonwebtoken = "9.3.1"

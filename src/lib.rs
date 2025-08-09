@@ -5,6 +5,7 @@ pub mod config;
 pub mod controllers;
 pub mod database;
 pub mod dtos;
+pub mod middlewares;
 pub mod models;
 pub mod resources;
 pub mod routes;
