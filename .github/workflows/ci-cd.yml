@@ -121,7 +121,7 @@ jobs:
           port: ${{ secrets.PORT || 22 }}
           script: |
             # Navigate to application directory
-            cd /opt/axum-app || exit 1
+            cd /www/dk_project/dk_app/axum_template || exit 1
 
             # Pull latest changes
             git pull origin master
