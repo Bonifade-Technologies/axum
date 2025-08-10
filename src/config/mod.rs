@@ -2,8 +2,8 @@ use once_cell::sync::Lazy;
 use std::env;
 
 pub mod database;
-pub mod redis;
 pub mod email;
+pub mod redis;
 
 // JWT constants with fallback
 pub const JWT_SECRET: Lazy<String> = Lazy::new(|| {
