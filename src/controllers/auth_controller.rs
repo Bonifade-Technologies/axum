@@ -12,6 +12,7 @@ use crate::utils::auth::{
     set_forgot_password_rate_limit, store_otp, unique_email, update_user_password,
     verify_and_consume_otp, verify_password, CachedUser,
 };
+use crate::utils::job_queue::queue_password_reset_success_email;
 
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Extension};
 use chrono::Utc;
@@ -419,6 +420,21 @@ pub async fn reset_password(
         );
     }
 
+    // Get user data for the success email
+    let user_data = match get_user_from_cache_or_db(&payload.email).await {
+        Some(user) => user,
+        None => {
+            let error_response = serde_json::json!({
+                "system": "Unable to process password reset at this time"
+            });
+            return api_response::failure(
+                Some("System error"),
+                Some(error_response),
+                Some(StatusCode::INTERNAL_SERVER_ERROR),
+            );
+        }
+    };
+
     // Verify and consume OTP
     match verify_and_consume_otp(&payload.email, &payload.otp).await {
         Ok(true) => {
@@ -432,12 +448,36 @@ pub async fn reset_password(
                         );
                     }
 
+                    // Queue success email in background
+                    let reset_time = chrono::Utc::now()
+                        .format("%B %d, %Y at %I:%M %p UTC")
+                        .to_string();
+                    if let Err(e) = queue_password_reset_success_email(
+                        &payload.email,
+                        &user_data.name,
+                        &reset_time,
+                    )
+                    .await
+                    {
+                        println!(
+                            "WARNING: Failed to queue password reset success email: {}",
+                            e
+                        );
+                        // Don't fail the password reset if email queuing fails
+                    } else {
+                        println!(
+                            "✅ Password reset success email queued for: {}",
+                            payload.email
+                        );
+                    }
+
                     api_response::success(
                         Some("Password reset successful"),
                         Some(serde_json::json!({
                             "message": "Your password has been reset successfully",
                             "email": payload.email,
-                            "note": "All existing sessions have been invalidated. Please log in with your new password."
+                            "note": "All existing sessions have been invalidated. Please log in with your new password.",
+                            "email_notification": "A confirmation email has been sent to your email address."
                         })),
                         Some(StatusCode::OK),
                     )

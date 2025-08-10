@@ -11,6 +11,8 @@ A robust authentication system built with Rust, Axum web framework, Sea-ORM, and
 - **Middleware Protection** - Route protection with JWT middleware
 - **Structured Error Responses** - Field-specific error messages in JSON format
 - **Email Password Reset** - OTP-based password reset with SMTP email support
+- **HTML Email Templates** - Beautiful HTML email notifications with Tera templating
+- **Background Job Processing** - Queued email sending using background tasks
 - **Rate Limiting** - Forgot password rate limiting with 5-minute cooldown per email
 
 ## Tech Stack
@@ -22,6 +24,8 @@ A robust authentication system built with Rust, Axum web framework, Sea-ORM, and
 - **Password Hashing**: bcrypt
 - **Validation**: validator crate
 - **Migration**: Sea-ORM migration tools
+- **Email Templates**: Tera templating engine
+- **Background Jobs**: Simplified async task processing
 
 ## Project Structure
 
@@ -631,7 +635,43 @@ curl -X DELETE http://localhost:3001/admin/clear-cache/user@example.com
 }
 ```
 
-#### 2. Token Management
+#### 2. HTML Email Templates
+
+**Password Reset Success Email:**
+
+After a successful password reset, users receive a beautiful HTML email confirmation that includes:
+
+- Professional styling with responsive design
+- Security information (reset timestamp, session invalidation notice)
+- Call-to-action button to log in
+- Security tips and best practices
+- Branded template with customizable variables
+
+**Template Features:**
+
+- **Tera templating engine** for dynamic content
+- **Responsive design** for mobile and desktop
+- **Security-focused messaging** to build user trust
+- **Professional branding** with customizable colors and logos
+- **Background job processing** for fast API responses
+
+**Template Variables:**
+
+```html
+- {{ name }} - User's display name - {{ email }} - User's email address - {{
+reset_time }} - Timestamp of password reset - {{ login_url }} - Frontend login
+URL - {{ current_date }} - Current date - {{ current_time }} - Current time
+```
+
+**Customization:**
+
+Templates are stored in `src/views/` and can be easily customized:
+
+- `password_reset_success.html` - Success notification template
+- Modify CSS, colors, branding, and content as needed
+- Add new templates for different email types
+
+#### 3. Token Management
 
 **Logout (Token Invalidation):**
 
@@ -646,7 +686,7 @@ curl -X POST http://localhost:3001/auth/logout \
 - Only the most recent login session remains active
 - Prevents token proliferation and unauthorized access
 
-#### 3. Performance Metrics
+#### 4. Performance Metrics
 
 **Cache Hit Rates:**
 
@@ -1018,13 +1058,16 @@ curl -X POST http://localhost:3001/auth/reset-password \
 ```json
 {
   "success": true,
-  "message": "Password reset successfully",
+  "message": "Your password has been reset successfully",
   "data": {
     "email": "john@example.com",
-    "password_updated": true
+    "note": "All existing sessions have been invalidated. Please log in with your new password.",
+    "email_notification": "A confirmation email has been sent to your email address."
   }
 }
 ```
+
+**Note:** After a successful password reset, a beautiful HTML confirmation email is automatically sent to the user in the background using our job queue system.
 
 ### Error Response Format
 
