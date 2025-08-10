@@ -5,12 +5,12 @@ use redis::AsyncCommands;
 
 pub async fn clear_all_caches() -> impl IntoResponse {
     let client = redis_client();
-    
+
     match client.get_multiplexed_async_connection().await {
         Ok(mut conn) => {
             // Get all keys
             let keys: Result<Vec<String>, redis::RedisError> = conn.keys("*").await;
-            
+
             match keys {
                 Ok(key_list) => {
                     if key_list.is_empty() {
@@ -20,26 +20,24 @@ pub async fn clear_all_caches() -> impl IntoResponse {
                             Some(StatusCode::OK),
                         );
                     }
-                    
+
                     // Delete all keys
                     let deleted: Result<i32, redis::RedisError> = conn.del(&key_list).await;
-                    
+
                     match deleted {
-                        Ok(count) => {
-                            api_response::success(
-                                Some("All caches cleared successfully"),
-                                Some(serde_json::json!({
-                                    "cleared_keys": count,
-                                    "cache_types_cleared": [
-                                        "user_cache",
-                                        "tokens", 
-                                        "activity_counters",
-                                        "sessions"
-                                    ]
-                                })),
-                                Some(StatusCode::OK),
-                            )
-                        }
+                        Ok(count) => api_response::success(
+                            Some("All caches cleared successfully"),
+                            Some(serde_json::json!({
+                                "cleared_keys": count,
+                                "cache_types_cleared": [
+                                    "user_cache",
+                                    "tokens",
+                                    "activity_counters",
+                                    "sessions"
+                                ]
+                            })),
+                            Some(StatusCode::OK),
+                        ),
                         Err(e) => {
                             let error_response = serde_json::json!({
                                 "redis": format!("Failed to delete keys: {}", e)
@@ -79,21 +77,19 @@ pub async fn clear_all_caches() -> impl IntoResponse {
 
 pub async fn clear_user_cache(Path(email): Path<String>) -> impl IntoResponse {
     let client = redis_client();
-    
+
     match client.get_multiplexed_async_connection().await {
         Ok(mut conn) => {
             // Keys to clear for a specific user
-            let keys_to_clear = vec![
-                format!("user:{}", email),
-                format!("activity:{}", email),
-            ];
-            
+            let keys_to_clear = vec![format!("user:{}", email), format!("activity:{}", email)];
+
             // Get all tokens for this user
             let token_pattern = format!("token:*");
-            let all_tokens: Result<Vec<String>, redis::RedisError> = conn.keys(&token_pattern).await;
-            
+            let all_tokens: Result<Vec<String>, redis::RedisError> =
+                conn.keys(&token_pattern).await;
+
             let mut total_cleared = 0;
-            
+
             // Clear user-specific keys
             for key in &keys_to_clear {
                 let deleted: Result<i32, redis::RedisError> = conn.del(key).await;
@@ -101,14 +97,15 @@ pub async fn clear_user_cache(Path(email): Path<String>) -> impl IntoResponse {
                     total_cleared += count;
                 }
             }
-            
+
             // Clear user's tokens
             if let Ok(tokens) = all_tokens {
                 for token_key in tokens {
                     let token_email: Result<String, redis::RedisError> = conn.get(&token_key).await;
                     if let Ok(stored_email) = token_email {
                         if stored_email == email {
-                            let deleted: Result<i32, redis::RedisError> = conn.del(&token_key).await;
+                            let deleted: Result<i32, redis::RedisError> =
+                                conn.del(&token_key).await;
                             if let Ok(count) = deleted {
                                 total_cleared += count;
                             }
@@ -116,7 +113,7 @@ pub async fn clear_user_cache(Path(email): Path<String>) -> impl IntoResponse {
                     }
                 }
             }
-            
+
             api_response::success(
                 Some("User cache cleared successfully"),
                 Some(serde_json::json!({

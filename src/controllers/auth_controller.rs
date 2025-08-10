@@ -160,7 +160,10 @@ pub async fn login(
         match invalidate_all_user_tokens(&payload.email).await {
             Ok(count) => {
                 if count > 0 {
-                    println!("DEBUG: Invalidated {} existing tokens for {}", count, payload.email);
+                    println!(
+                        "DEBUG: Invalidated {} existing tokens for {}",
+                        count, payload.email
+                    );
                 }
             }
             Err(e) => {
@@ -230,23 +233,26 @@ pub async fn logout(
 ) -> impl IntoResponse {
     // Since we have the user from middleware, we can invalidate all their tokens
     // This is actually more secure than just invalidating the current token
-    
+
     let client = redis_client();
     match client.get_multiplexed_async_connection().await {
         Ok(mut conn) => {
             // Get all tokens for this user and delete them
             let token_pattern = "token:*";
-            let all_token_keys: Result<Vec<String>, redis::RedisError> = conn.keys(token_pattern).await;
-            
+            let all_token_keys: Result<Vec<String>, redis::RedisError> =
+                conn.keys(token_pattern).await;
+
             let mut invalidated_count = 0;
-            
+
             if let Ok(token_keys) = all_token_keys {
                 for token_key in token_keys {
-                    let stored_email: Result<String, redis::RedisError> = conn.get(&token_key).await;
-                    
+                    let stored_email: Result<String, redis::RedisError> =
+                        conn.get(&token_key).await;
+
                     if let Ok(stored_email) = stored_email {
                         if stored_email == user.email {
-                            let deleted: Result<i32, redis::RedisError> = conn.del(&token_key).await;
+                            let deleted: Result<i32, redis::RedisError> =
+                                conn.del(&token_key).await;
                             if let Ok(count) = deleted {
                                 invalidated_count += count;
                             }
@@ -254,7 +260,7 @@ pub async fn logout(
                     }
                 }
             }
-            
+
             api_response::success(
                 Some("Logout successful"),
                 Some(serde_json::json!({

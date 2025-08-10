@@ -242,17 +242,17 @@ pub async fn increment_user_activity(email: &str) {
 pub async fn invalidate_all_user_tokens(email: &str) -> Result<i32, redis::RedisError> {
     let client = redis_client();
     let mut conn = client.get_multiplexed_async_connection().await?;
-    
+
     // Get all token keys
     let token_pattern = "token:*";
     let all_token_keys: Vec<String> = conn.keys(token_pattern).await?;
-    
+
     let mut invalidated_count = 0;
-    
+
     // Check each token to see if it belongs to this user
     for token_key in all_token_keys {
         let stored_email: Result<String, redis::RedisError> = conn.get(&token_key).await;
-        
+
         if let Ok(stored_email) = stored_email {
             if stored_email == email {
                 // Delete this token
@@ -261,6 +261,6 @@ pub async fn invalidate_all_user_tokens(email: &str) -> Result<i32, redis::Redis
             }
         }
     }
-    
+
     Ok(invalidated_count)
 }
