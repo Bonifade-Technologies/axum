@@ -52,18 +52,6 @@ services:
     restart: unless-stopped
     env_file:
       - .env
-    environment:
-      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@postgres:5432/${DB_NAME:-axum_auth}
-      - REDIS_URL=redis://:${REDIS_PASSWORD:-redis_password}@redis:6379
-      - SMTP_HOST=${SMTP_HOST}
-      - SMTP_PORT=${SMTP_PORT:-587}
-      - SMTP_USERNAME=${SMTP_USERNAME}
-      - SMTP_PASSWORD=${SMTP_PASSWORD}
-      - FROM_EMAIL=${FROM_EMAIL}
-      - FROM_NAME=${FROM_NAME}
-      - JWT_SECRET=${JWT_SECRET}
-      - FRONTEND_LOGIN_URL=${FRONTEND_LOGIN_URL:-http://localhost:3001/login}
-      - RUST_LOG=${RUST_LOG:-info}
     ports:
       - "${APP_PORT:-3001}:3001"
     depends_on:
