@@ -14,7 +14,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
-      - "${DB_PORT:-5432}:5432"
+      - "${DB_PORT:-5433}:5432"
     networks:
       - axum_network
     healthcheck:
@@ -36,7 +36,7 @@ services:
     volumes:
       - redis_data:/data
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "${REDIS_PORT:-6380}:6379"
     networks:
       - axum_network
     healthcheck:
@@ -62,7 +62,7 @@ services:
       - FROM_EMAIL=${FROM_EMAIL}
       - FROM_NAME=${FROM_NAME}
       - JWT_SECRET=${JWT_SECRET}
-      - FRONTEND_LOGIN_URL=${FRONTEND_LOGIN_URL:-http://localhost:3000/login}
+      - FRONTEND_LOGIN_URL=${FRONTEND_LOGIN_URL:-http://localhost:3001/login}
       - RUST_LOG=${RUST_LOG:-info}
     ports:
       - "${APP_PORT:-3001}:3001"

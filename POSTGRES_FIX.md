@@ -41,7 +41,7 @@ Updated `.github/workflows/ci-cd.yml` to:
 
 - Copy `.env.docker` to `.env` during deployment
 - Use single `docker-compose.yml` file (removed production override)
-- Fixed health check endpoint from `:3001` to `:3000`
+- Fixed health check endpoint from `:3001` to `:3001`
 
 ### 4. Docker Compose Fixes
 
@@ -80,7 +80,7 @@ The CI/CD pipeline will now:
 - PostgreSQL container starts with `postgres` user (not `root`)
 - Application connects to `postgres://postgres:password@postgres:5432/axum_auth`
 - Redis connects with password authentication
-- Health checks pass on port 3000
+- Health checks pass on port 3001
 
 ## Verification Commands (on VPS)
 

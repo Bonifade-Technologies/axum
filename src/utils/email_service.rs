@@ -138,7 +138,7 @@ pub async fn send_password_reset_success_email(
     reset_time: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let login_url = env::var("FRONTEND_LOGIN_URL")
-        .unwrap_or_else(|_| "http://localhost:3000/login".to_string());
+        .unwrap_or_else(|_| "http://localhost:3001/login".to_string());
 
     let html_body = render_password_reset_success_email(to_name, to_email, reset_time, &login_url)?;
 

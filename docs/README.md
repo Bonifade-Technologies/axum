@@ -189,7 +189,7 @@ once_cell = "1.21"
 
 ```
 APP_URL=0.0.0.0
-APP_PORT=3000
+APP_PORT=3001
 ```
 
 ### 3. Load dotenv in your code

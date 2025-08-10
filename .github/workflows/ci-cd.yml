@@ -126,8 +126,8 @@ jobs:
             # Pull latest changes
             git pull origin master
 
-            # Copy Docker environment file
-            cp .env.docker .env
+            # Copy production environment file with custom ports to avoid conflicts
+            cp .env.production .env
 
             # Stop current services
             docker-compose down
@@ -140,7 +140,7 @@ jobs:
 
             # Health check
             sleep 30
-            curl -f http://localhost:3000/health || exit 1
+            curl -f http://localhost:3001/health || exit 1
 
             echo "Deployment completed successfully!"
 
