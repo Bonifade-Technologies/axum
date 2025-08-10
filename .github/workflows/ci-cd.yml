@@ -126,9 +126,8 @@ jobs:
             # Pull latest changes
             git pull origin master
 
-            # Copy production environment file with custom ports to avoid conflicts
-            cp .env.production .env
-
+            # Use existing .env file in production (no copying needed)
+            
             # Stop current services
             docker-compose down
 
