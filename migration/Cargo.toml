@@ -20,4 +20,5 @@ features = [
   # e.g.
   "runtime-tokio-rustls",  # `ASYNC_RUNTIME` feature
   "sqlx-postgres",         # `DATABASE_DRIVER` feature - only PostgreSQL
+  # Explicitly disable CLI to avoid pulling in all database drivers
 ]

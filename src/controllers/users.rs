@@ -408,7 +408,7 @@ pub async fn restore_user(
         Ok(Some(user)) => {
             let mut active: user::ActiveModel = user.into();
             active.deleted_at = Set(None);
-            active.updated_at = Set(chrono::Utc::now().naive_utc());
+            active.updated_at = Set(chrono::Utc::now());
             let restore_res = active.update(&db).await;
 
             match restore_res {

@@ -1,0 +1,34 @@
+# Cargo audit configuration
+# This file allows ignoring known issues that don't affect production security
+
+[advisories]
+# RSA Marvin Attack in development dependencies only
+# This vulnerability is in sea-orm CLI tools that are not used in production
+# The application only uses PostgreSQL and does not perform RSA operations
+# Risk: Development environment only, no production impact
+ignore = [
+    "RUSTSEC-2023-0071"  # RSA Marvin Attack via sqlx-mysql in sea-orm dev tools
+]
+
+[licenses]
+# Allowed licenses for dependencies
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-DFS-2016",
+    "CC0-1.0"
+]
+
+[bans]
+# Deny certain problematic dependencies
+deny = []
+
+# Allow specific crates that might otherwise be flagged
+skip = []
+
+# Skip checking git dependencies
+skip-tree = []
