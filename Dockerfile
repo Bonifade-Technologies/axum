@@ -1,16 +1,16 @@
 # Multi-stage Dockerfile for lean Rust production builds
 # Stage 1: Build dependencies and cache them
-FROM rust:1.88-slim as chef
+FROM rust:1.88-slim AS chef
 WORKDIR /app
 RUN cargo install cargo-chef
 
 # Stage 2: Prepare recipe file for dependency caching
-FROM chef as planner
+FROM chef AS planner
 COPY . .
 RUN cargo chef prepare --recipe-path recipe.json
 
 # Stage 3: Build dependencies (cached layer)
-FROM chef as builder
+FROM chef AS builder
 COPY --from=planner /app/recipe.json recipe.json
 # Install system dependencies needed for building
 RUN apt-get update && apt-get install -y \
