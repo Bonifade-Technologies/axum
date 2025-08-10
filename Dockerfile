@@ -54,11 +54,11 @@ RUN chown -R axum_user:axum_user /app
 USER axum_user
 
 # Expose port
-EXPOSE 3001
+EXPOSE 3003
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:3001/health || exit 1
+    CMD curl -f http://localhost:3003/health || exit 1
 
 # Run the application
 CMD ["./axum-template"]

@@ -53,7 +53,7 @@ services:
     env_file:
       - .env
     ports:
-      - "${APP_PORT:-3001}:3001"
+      - "${APP_PORT:-3003}:3003"
     depends_on:
       postgres:
         condition: service_healthy
@@ -62,7 +62,7 @@ services:
     networks:
       - axum_network
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:3001/health || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:3003/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

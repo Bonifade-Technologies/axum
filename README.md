@@ -110,7 +110,7 @@ JWT_SECRET=your_secure_jwt_secret_key_change_in_production
 
 # Server Configuration
 HOST=127.0.0.1
-PORT=3001
+PORT=3003
 
 # Email Configuration (for password reset)
 SMTP_HOST=smtp.gmail.com
@@ -608,13 +608,13 @@ ACTIVE_USER_TTL: 30 days     // Very active users get longer cache
 **Clear All Caches:**
 
 ```bash
-curl -X DELETE http://localhost:3001/admin/clear-cache
+curl -X DELETE http://localhost:3003/admin/clear-cache
 ```
 
 **Clear User-Specific Cache:**
 
 ```bash
-curl -X DELETE http://localhost:3001/admin/clear-cache/user@example.com
+curl -X DELETE http://localhost:3003/admin/clear-cache/user@example.com
 ```
 
 **Response Format:**
@@ -676,7 +676,7 @@ Templates are stored in `src/views/` and can be easily customized:
 **Logout (Token Invalidation):**
 
 ```bash
-curl -X POST http://localhost:3001/auth/logout \
+curl -X POST http://localhost:3003/auth/logout \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
@@ -805,7 +805,7 @@ ENV JWT_SECRET=${JWT_SECRET}
 ENV DATABASE_URL=${DATABASE_URL}
 ENV REDIS_URL=${REDIS_URL}
 
-EXPOSE 3001
+EXPOSE 3003
 CMD ["app"]
 ```
 
@@ -813,13 +813,13 @@ CMD ["app"]
 
 ```bash
 # Authentication health check endpoint
-curl http://localhost:3001/health
+curl http://localhost:3003/health
 
 # Redis connectivity check
-curl http://localhost:3001/health/redis
+curl http://localhost:3003/health/redis
 
 # Database connectivity check
-curl http://localhost:3001/health/database
+curl http://localhost:3003/health/database
 ```
 
 This authentication system is production-ready with enterprise-grade security, performance optimizations, and comprehensive monitoring capabilities.
@@ -851,7 +851,7 @@ This authentication system is production-ready with enterprise-grade security, p
 **Registration:**
 
 ```bash
-curl -X POST http://localhost:3001/auth/register \
+curl -X POST http://localhost:3003/auth/register \
   -H "Content-Type: application/json" \
   -d '{
     "name": "John Doe",
@@ -885,7 +885,7 @@ curl -X POST http://localhost:3001/auth/register \
 **Login:**
 
 ```bash
-curl -X POST http://localhost:3001/auth/login \
+curl -X POST http://localhost:3003/auth/login \
   -H "Content-Type: application/json" \
   -d '{
     "email": "john@example.com",
@@ -916,7 +916,7 @@ curl -X POST http://localhost:3001/auth/login \
 **Logout:**
 
 ```bash
-curl -X POST http://localhost:3001/auth/logout \
+curl -X POST http://localhost:3003/auth/logout \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
@@ -935,7 +935,7 @@ curl -X POST http://localhost:3001/auth/logout \
 **Profile (requires JWT token):**
 
 ```bash
-curl -X GET http://localhost:3001/auth/profile \
+curl -X GET http://localhost:3003/auth/profile \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
@@ -961,7 +961,7 @@ curl -X GET http://localhost:3001/auth/profile \
 **Clear All Caches (Admin):**
 
 ```bash
-curl -X DELETE http://localhost:3001/admin/clear-cache
+curl -X DELETE http://localhost:3003/admin/clear-cache
 ```
 
 **Response:**
@@ -985,7 +985,7 @@ curl -X DELETE http://localhost:3001/admin/clear-cache
 **Clear User Cache (Admin):**
 
 ```bash
-curl -X DELETE http://localhost:3001/admin/clear-cache/john@example.com
+curl -X DELETE http://localhost:3003/admin/clear-cache/john@example.com
 ```
 
 **Response:**
@@ -1005,7 +1005,7 @@ curl -X DELETE http://localhost:3001/admin/clear-cache/john@example.com
 **Forgot Password (Send OTP):**
 
 ```bash
-curl -X POST http://localhost:3001/auth/forgot-password \
+curl -X POST http://localhost:3003/auth/forgot-password \
   -H "Content-Type: application/json" \
   -d '{
     "email": "john@example.com"
@@ -1043,7 +1043,7 @@ curl -X POST http://localhost:3001/auth/forgot-password \
 **Reset Password (Verify OTP and Update Password):**
 
 ```bash
-curl -X POST http://localhost:3001/auth/reset-password \
+curl -X POST http://localhost:3003/auth/reset-password \
   -H "Content-Type: application/json" \
   -d '{
     "email": "john@example.com",
