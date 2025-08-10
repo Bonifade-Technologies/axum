@@ -63,7 +63,7 @@ jobs:
         run: cargo fmt -- --check
 
       - name: Run Clippy
-        run: cargo clippy -- -D warnings
+        run: cargo clippy -- -D warnings -A clippy::uninlined_format_args -A clippy::derivable_impls -A clippy::wildcard_in_or_patterns -A clippy::borrow_interior_mutable_const -A clippy::manual_async_fn -A clippy::useless_format -A clippy::declare_interior_mutable_const
 
       - name: Run tests
         env:

@@ -131,14 +131,14 @@ async fn get_smart_ttl_for_user(email: &str) -> u64 {
 /// Track user login activity for smart TTL calculation
 pub async fn increment_user_activity(email: &str) {
     let client = redis_client();
-    
+
     if let Ok(mut conn) = client.get_multiplexed_tokio_connection().await {
         let activity_key = format!("activity:{}", email);
-        
+
         // Increment login counter with 30-day expiry
         let new_count: Result<i64, redis::RedisError> = conn.incr(&activity_key, 1).await;
         let _: Result<(), redis::RedisError> = conn.expire(&activity_key, 30 * 24 * 60 * 60).await;
-        
+
         if let Ok(count) = new_count {
             println!("📊 User {} activity count: {}", email, count);
         }
@@ -148,11 +148,11 @@ pub async fn increment_user_activity(email: &str) {
 /// Extend cache TTL when user is accessed (sliding window)
 pub async fn extend_user_cache_ttl(email: &str) {
     let client = redis_client();
-    
+
     if let Ok(mut conn) = client.get_multiplexed_tokio_connection().await {
         let redis_key = format!("user:{}", email);
         let new_ttl = get_smart_ttl_for_user(email).await;
-        
+
         let _: Result<(), redis::RedisError> = conn.expire(&redis_key, new_ttl as i64).await;
         println!("⏰ Extended TTL for user: {} to {} seconds", email, new_ttl);
     }
@@ -166,7 +166,7 @@ pub async fn user_exists_smart(email: &str) -> bool {
 /// Clear user from cache (useful for profile updates)
 pub async fn invalidate_user_cache(email: &str) {
     let client = redis_client();
-    
+
     if let Ok(mut conn) = client.get_multiplexed_tokio_connection().await {
         let redis_key = format!("user:{}", email);
         let _: Result<(), redis::RedisError> = conn.del(&redis_key).await;
