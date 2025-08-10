@@ -10,6 +10,8 @@ A robust authentication system built with Rust, Axum web framework, Sea-ORM, and
 - **Validation** - Request validation with custom email uniqueness checks
 - **Middleware Protection** - Route protection with JWT middleware
 - **Structured Error Responses** - Field-specific error messages in JSON format
+- **Email Password Reset** - OTP-based password reset with SMTP email support
+- **Rate Limiting** - Forgot password rate limiting with 5-minute cooldown per email
 
 ## Tech Stack
 
@@ -588,6 +590,13 @@ ACTIVE_USER_TTL: 30 days     // Very active users get longer cache
 - **Token invalidation** on new login (prevents token proliferation)
 - **Secure headers** required for all protected routes
 
+#### Rate Limiting
+
+- **Forgot Password Rate Limiting** - 5-minute cooldown per email address
+- **Redis-based tracking** for efficient rate limit storage
+- **Per-email enforcement** to prevent abuse while allowing legitimate requests
+- **Graceful error responses** with remaining time information
+
 ### 🛠️ Advanced Features
 
 #### 1. Cache Management API
@@ -963,7 +972,7 @@ curl -X POST http://localhost:3001/auth/forgot-password \
   }'
 ```
 
-**Response:**
+**Response (Success):**
 
 ```json
 {
@@ -975,6 +984,21 @@ curl -X POST http://localhost:3001/auth/forgot-password \
   }
 }
 ```
+
+**Response (Rate Limited - 429 Too Many Requests):**
+
+```json
+{
+  "success": false,
+  "message": "Please wait 4 minute(s) before requesting another password reset",
+  "data": {
+    "remaining_minutes": 4,
+    "remaining_seconds": 228
+  }
+}
+```
+
+**Note:** The forgot password endpoint has a 5-minute rate limit per email address to prevent abuse. Once an OTP is requested, you must wait 5 minutes before requesting another one for the same email.
 
 **Reset Password (Verify OTP and Update Password):**
 
