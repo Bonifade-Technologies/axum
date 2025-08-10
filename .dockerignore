@@ -1,0 +1,42 @@
+# Ignore build artifacts
+target/
+Cargo.lock
+
+# Ignore development files
+.env.local
+.env.development
+*.log
+
+# Ignore git and CI
+.git/
+.github/
+.gitignore
+
+# Ignore documentation
+*.md
+docs/
+
+# Ignore test files
+tests/
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
+
+# Ignore IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Ignore temporary files
+tmp/
+temp/
+*.tmp
+
+# Keep only essential files for Docker build
+!src/
+!Cargo.toml
+!migration/
+!.env.example
