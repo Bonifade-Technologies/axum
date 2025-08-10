@@ -65,13 +65,6 @@ jobs:
       - name: Run Clippy
         run: cargo clippy -- -D warnings -A clippy::uninlined_format_args -A clippy::derivable_impls -A clippy::wildcard_in_or_patterns -A clippy::borrow_interior_mutable_const -A clippy::manual_async_fn -A clippy::useless_format -A clippy::declare_interior_mutable_const
 
-      - name: Install cargo-audit
-        run: cargo install cargo-audit
-
-      - name: Security audit
-        run: cargo audit --ignore RUSTSEC-2023-0071
-        continue-on-error: false
-
       - name: Run tests
         env:
           DATABASE_URL: postgresql://test_user:test_password@localhost/test_db

@@ -46,15 +46,6 @@ else
     print_status "Docker already installed"
 fi
 
-# Install Docker Compose
-if ! command -v docker-compose &> /dev/null; then
-    print_status "Installing Docker Compose..."
-    sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-    sudo chmod +x /usr/local/bin/docker-compose
-else
-    print_status "Docker Compose already installed"
-fi
-
 # Install Git
 if ! command -v git &> /dev/null; then
     print_status "Installing Git..."
@@ -69,16 +60,6 @@ if ! command -v curl &> /dev/null; then
     sudo apt install -y curl
 else
     print_status "curl already installed"
-fi
-
-# Create application directory
-APP_DIR="/opt/axum-app"
-if [ ! -d "$APP_DIR" ]; then
-    print_status "Creating application directory..."
-    sudo mkdir -p $APP_DIR
-    sudo chown $USER:$USER $APP_DIR
-else
-    print_status "Application directory already exists"
 fi
 
 # Clone repository (you'll need to update this URL)
@@ -110,23 +91,6 @@ if [ ! -f ".env" ]; then
     print_warning "- All other environment variables"
 else
     print_status "Environment file already exists"
-fi
-
-# Set up firewall
-print_status "Configuring firewall..."
-sudo ufw --force enable
-sudo ufw allow ssh
-sudo ufw allow 80
-sudo ufw allow 443
-sudo ufw --force reload
-
-# Create SSL directory (optional)
-SSL_DIR="$APP_DIR/ssl"
-if [ ! -d "$SSL_DIR" ]; then
-    print_status "Creating SSL directory..."
-    mkdir -p $SSL_DIR
-    print_warning "Place your SSL certificates in $SSL_DIR/"
-    print_warning "Files needed: cert.pem, key.pem"
 fi
 
 # Create systemd service for auto-restart
