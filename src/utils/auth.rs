@@ -352,6 +352,6 @@ pub async fn update_user_password(
 
         Ok(true)
     } else {
-        Ok(false) // User not found
+        Ok(false)
     }
 }

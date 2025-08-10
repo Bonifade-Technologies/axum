@@ -1,14 +1,14 @@
-use crate::config::redis::redis_client;
 use crate::config::email::send_otp_email;
+use crate::config::redis::redis_client;
 use crate::database::users as user;
-use crate::dtos::auth_dto::{LoginDto, SignupDto, ForgotPasswordDto, ResetPasswordDto};
+use crate::dtos::auth_dto::{ForgotPasswordDto, LoginDto, ResetPasswordDto, SignupDto};
 use crate::extractors::json_extractor::ValidatedJson;
 use crate::resources::user_resource::UserResource;
 use crate::utils::api_response;
 use crate::utils::auth::{
-    authenticate_user, cache_complete_user_data, exist_email, generate_jwt_token, hash_password,
-    invalidate_all_user_tokens, unique_email, verify_password, CachedUser, generate_otp, 
-    store_otp, verify_and_consume_otp, update_user_password, get_user_from_cache_or_db,
+    authenticate_user, cache_complete_user_data, exist_email, generate_jwt_token, generate_otp,
+    get_user_from_cache_or_db, hash_password, invalidate_all_user_tokens, store_otp, unique_email,
+    update_user_password, verify_and_consume_otp, verify_password, CachedUser,
 };
 
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Extension};
@@ -324,17 +324,15 @@ pub async fn forgot_password(
         Ok(_) => {
             // Send OTP email
             match send_otp_email(&payload.email, &user_data.name, &otp).await {
-                Ok(_) => {
-                    api_response::success(
-                        Some("OTP sent successfully"),
-                        Some(serde_json::json!({
-                            "message": "Password reset OTP has been sent to your email",
-                            "email": payload.email,
-                            "expires_in_minutes": 10
-                        })),
-                        Some(StatusCode::OK),
-                    )
-                }
+                Ok(_) => api_response::success(
+                    Some("OTP sent successfully"),
+                    Some(serde_json::json!({
+                        "message": "Password reset OTP has been sent to your email",
+                        "email": payload.email,
+                        "expires_in_minutes": 10
+                    })),
+                    Some(StatusCode::OK),
+                ),
                 Err(e) => {
                     println!("ERROR: Failed to send email: {}", e);
                     let error_response = serde_json::json!({
@@ -362,7 +360,6 @@ pub async fn forgot_password(
     }
 }
 
-// Reset password function - verifies OTP and updates password
 pub async fn reset_password(
     ValidatedJson(payload): ValidatedJson<ResetPasswordDto>,
 ) -> impl IntoResponse {
@@ -384,10 +381,11 @@ pub async fn reset_password(
             // OTP is valid, proceed with password update
             match update_user_password(&payload.email, &payload.new_password).await {
                 Ok(true) => {
-                    // Password updated successfully
-                    // Invalidate all existing tokens for security
                     if let Err(e) = invalidate_all_user_tokens(&payload.email).await {
-                        println!("WARNING: Failed to invalidate tokens after password reset: {}", e);
+                        println!(
+                            "WARNING: Failed to invalidate tokens after password reset: {}",
+                            e
+                        );
                     }
 
                     api_response::success(
@@ -431,7 +429,7 @@ pub async fn reset_password(
             api_response::failure(
                 Some("Invalid OTP"),
                 Some(error_response),
-                Some(StatusCode::BAD_REQUEST),
+                Some(StatusCode::UNPROCESSABLE_ENTITY),
             )
         }
         Err(e) => {
