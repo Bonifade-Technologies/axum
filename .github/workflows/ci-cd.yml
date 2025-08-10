@@ -2,9 +2,9 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, auth, develop ]
+    branches: [master]
   pull_request:
-    branches: [ main ]
+    branches: [master]
 
 env:
   CARGO_TERM_COLOR: always
@@ -16,7 +16,7 @@ jobs:
   test:
     name: Test and Build
     runs-on: ubuntu-latest
-    
+
     services:
       postgres:
         image: postgres:15
@@ -31,7 +31,7 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
-      
+
       redis:
         image: redis:7-alpine
         options: >-
@@ -43,68 +43,68 @@ jobs:
           - 6379:6379
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        components: rustfmt, clippy
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
 
-    - name: Cache Rust dependencies
-      uses: Swatinem/rust-cache@v2
-      with:
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y pkg-config libssl-dev
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libssl-dev
 
-    - name: Check formatting
-      run: cargo fmt -- --check
+      - name: Check formatting
+        run: cargo fmt -- --check
 
-    - name: Run Clippy
-      run: cargo clippy -- -D warnings
+      - name: Run Clippy
+        run: cargo clippy -- -D warnings
 
-    - name: Run tests
-      env:
-        DATABASE_URL: postgresql://test_user:test_password@localhost/test_db
-        REDIS_URL: redis://localhost:6379
-        JWT_SECRET: test_jwt_secret_key_for_testing_purposes_only
-        SMTP_HOST: smtp.gmail.com
-        SMTP_PORT: 587
-        SMTP_USERNAME: test@example.com
-        SMTP_PASSWORD: test_password
-        FROM_EMAIL: test@example.com
-        FROM_NAME: Test System
-      run: cargo test --verbose
+      - name: Run tests
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost/test_db
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test_jwt_secret_key_for_testing_purposes_only
+          SMTP_HOST: smtp.gmail.com
+          SMTP_PORT: 587
+          SMTP_USERNAME: test@example.com
+          SMTP_PASSWORD: test_password
+          FROM_EMAIL: test@example.com
+          FROM_NAME: Test System
+        run: cargo test --verbose
 
-    - name: Build release
-      run: cargo build --release
+      - name: Build release
+        run: cargo build --release
 
-    - name: Upload binary artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: axum-template-binary
-        path: target/release/axum-template
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: axum-template-binary
+          path: target/release/axum-template
 
   # Security audit
   security:
     name: Security Audit
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
-    
-    - name: Install cargo-audit
-      run: cargo install cargo-audit
-    
-    - name: Run security audit
-      run: cargo audit
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+
+      - name: Run security audit
+        run: cargo audit
 
   # Docker build and push
   docker:
@@ -112,42 +112,42 @@ jobs:
     runs-on: ubuntu-latest
     needs: [test, security]
     if: github.event_name == 'push'
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-    - name: Log in to Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Extract metadata
-      id: meta
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=sha,prefix={{branch}}-
-          type=raw,value=latest,enable={{is_default_branch}}
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
 
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        push: true
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-        platforms: linux/amd64,linux/arm64
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
 
   # Deploy to VPS
   deploy:
@@ -155,45 +155,45 @@ jobs:
     runs-on: ubuntu-latest
     needs: [docker]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
 
-    - name: Deploy to VPS
-      uses: appleboy/ssh-action@v1.0.0
-      with:
-        host: ${{ secrets.VPS_HOST }}
-        username: ${{ secrets.VPS_USERNAME }}
-        key: ${{ secrets.VPS_SSH_KEY }}
-        port: ${{ secrets.VPS_PORT || 22 }}
-        script: |
-          # Navigate to application directory
-          cd /opt/axum-app || exit 1
-          
-          # Pull latest changes
-          git pull origin main
-          
-          # Login to GitHub Container Registry
-          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-          
-          # Pull latest image
-          docker-compose -f docker-compose.yml -f docker-compose.prod.yml pull
-          
-          # Stop current services
-          docker-compose -f docker-compose.yml -f docker-compose.prod.yml down
-          
-          # Start updated services
-          docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-          
-          # Clean up unused images
-          docker image prune -f
-          
-          # Health check
-          sleep 30
-          curl -f http://localhost:3001/health || exit 1
-          
-          echo "Deployment completed successfully!"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script: |
+            # Navigate to application directory
+            cd /opt/axum-app || exit 1
+
+            # Pull latest changes
+            git pull origin main
+
+            # Login to GitHub Container Registry
+            echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            # Pull latest image
+            docker-compose -f docker-compose.yml -f docker-compose.prod.yml pull
+
+            # Stop current services
+            docker-compose -f docker-compose.yml -f docker-compose.prod.yml down
+
+            # Start updated services
+            docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+            # Clean up unused images
+            docker image prune -f
+
+            # Health check
+            sleep 30
+            curl -f http://localhost:3001/health || exit 1
+
+            echo "Deployment completed successfully!"
 
   # Notify deployment status
   notify:
@@ -201,17 +201,17 @@ jobs:
     runs-on: ubuntu-latest
     needs: [deploy]
     if: always()
-    
+
     steps:
-    - name: Notify Success
-      if: needs.deploy.result == 'success'
-      run: |
-        echo "🚀 Deployment successful!"
-        # Add notification logic here (Slack, Discord, etc.)
-    
-    - name: Notify Failure
-      if: needs.deploy.result == 'failure'
-      run: |
-        echo "❌ Deployment failed!"
-        # Add notification logic here (Slack, Discord, etc.)
-        exit 1
+      - name: Notify Success
+        if: needs.deploy.result == 'success'
+        run: |
+          echo "🚀 Deployment successful!"
+          # Add notification logic here (Slack, Discord, etc.)
+
+      - name: Notify Failure
+        if: needs.deploy.result == 'failure'
+        run: |
+          echo "❌ Deployment failed!"
+          # Add notification logic here (Slack, Discord, etc.)
+          exit 1
