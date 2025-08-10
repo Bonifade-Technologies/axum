@@ -112,7 +112,10 @@ pub fn queue_password_reset_success_email_nonblocking(
                 email, e
             );
         } else {
-            println!("✅ [Background Queue] Password reset email queued for: {}", email);
+            println!(
+                "✅ [Background Queue] Password reset email queued for: {}",
+                email
+            );
         }
     });
 }
@@ -121,7 +124,9 @@ pub fn queue_password_reset_success_email_nonblocking(
 pub fn spawn_job_queue<F, Fut>(job_name: &str, future: F)
 where
     F: FnOnce() -> Fut + Send + 'static,
-    Fut: std::future::Future<Output = Result<(), Box<dyn std::error::Error + Send + Sync>>> + Send + 'static,
+    Fut: std::future::Future<Output = Result<(), Box<dyn std::error::Error + Send + Sync>>>
+        + Send
+        + 'static,
 {
     let job_name = job_name.to_string();
     tokio::spawn(async move {

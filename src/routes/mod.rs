@@ -31,18 +31,21 @@ async fn hello_world() -> impl axum::response::IntoResponse {
 
 async fn health_check() -> impl axum::response::IntoResponse {
     use serde_json::json;
-    
+
     // Check Redis connection
-    let redis_status = match crate::config::redis::redis_client().get_multiplexed_async_connection().await {
+    let redis_status = match crate::config::redis::redis_client()
+        .get_multiplexed_async_connection()
+        .await
+    {
         Ok(_) => "healthy",
         Err(_) => "unhealthy",
     };
-    
+
     // For a more comprehensive health check, you could also check:
     // - Database connection
     // - Email service
     // - Job queue status
-    
+
     let health_data = json!({
         "status": "healthy",
         "timestamp": chrono::Utc::now(),
@@ -52,7 +55,7 @@ async fn health_check() -> impl axum::response::IntoResponse {
         },
         "version": env!("CARGO_PKG_VERSION")
     });
-    
+
     api_response::success(
         Some("Service is healthy"),
         Some(health_data),

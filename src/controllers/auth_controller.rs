@@ -455,20 +455,15 @@ pub async fn reset_password(
                     let email = payload.email.clone();
                     let name = user_data.name.clone();
                     tokio::spawn(async move {
-                        if let Err(e) = queue_password_reset_success_email(
-                            &email,
-                            &name,
-                            &reset_time,
-                        ).await {
+                        if let Err(e) =
+                            queue_password_reset_success_email(&email, &name, &reset_time).await
+                        {
                             println!(
                                 "WARNING: Failed to queue password reset success email: {}",
                                 e
                             );
                         } else {
-                            println!(
-                                "✅ Password reset success email queued for: {}",
-                                email
-                            );
+                            println!("✅ Password reset success email queued for: {}", email);
                         }
                     });
 

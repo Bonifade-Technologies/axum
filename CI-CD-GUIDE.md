@@ -5,6 +5,7 @@ This document explains the complete CI/CD pipeline and Docker deployment setup f
 ## 📁 Overview
 
 The project now includes:
+
 - **Multi-stage Dockerfile** for lean production builds
 - **Docker Compose** for local development and production
 - **GitHub Actions CI/CD** with automated testing and deployment
@@ -14,6 +15,7 @@ The project now includes:
 ## 🐳 Docker Setup
 
 ### Development
+
 ```bash
 # Start all services for development
 docker-compose up -d
@@ -26,6 +28,7 @@ docker-compose down
 ```
 
 ### Production
+
 ```bash
 # Start with production configuration
 docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
@@ -74,15 +77,18 @@ RUST_LOG=info
 ### Pipeline Stages
 
 1. **Test and Build**
+
    - Code formatting check (`cargo fmt`)
    - Linting with Clippy (`cargo clippy`)
    - Unit and integration tests (`cargo test`)
    - Release build (`cargo build --release`)
 
 2. **Security Audit**
+
    - Dependency vulnerability scanning (`cargo audit`)
 
 3. **Docker Build**
+
    - Multi-stage build for lean images
    - Push to GitHub Container Registry
    - Multi-platform builds (AMD64, ARM64)
@@ -108,12 +114,14 @@ VPS_PORT=22
 ### Initial VPS Configuration
 
 1. **Run the setup script on your VPS:**
+
 ```bash
 # Download and run the setup script
 curl -sSL https://raw.githubusercontent.com/your-username/your-repo/main/deploy/setup-vps.sh | bash
 ```
 
 2. **Or manually clone and run:**
+
 ```bash
 git clone https://github.com/your-username/your-repo.git
 cd your-repo
@@ -122,6 +130,7 @@ chmod +x deploy/setup-vps.sh
 ```
 
 ### What the setup script does:
+
 - ✅ Installs Docker and Docker Compose
 - ✅ Creates application directory (`/opt/axum-app`)
 - ✅ Clones your repository
@@ -162,17 +171,20 @@ nano .env  # Edit with your settings
 ## 🔐 Security Features
 
 ### Nginx Security Headers
+
 - `X-Frame-Options: SAMEORIGIN`
 - `X-XSS-Protection: 1; mode=block`
 - `X-Content-Type-Options: nosniff`
 - `Content-Security-Policy`
 
 ### Rate Limiting
+
 - API endpoints: 10 requests/second
 - Auth endpoints: 5 requests/second
 - Configurable burst limits
 
 ### Container Security
+
 - Non-root user in containers
 - Minimal base images (Debian Slim)
 - Resource limits in production
@@ -181,11 +193,13 @@ nano .env  # Edit with your settings
 ## 📊 Monitoring and Health Checks
 
 ### Health Check Endpoint
+
 ```bash
 curl http://your-domain.com/health
 ```
 
 Response:
+
 ```json
 {
   "success": true,
@@ -203,13 +217,16 @@ Response:
 ```
 
 ### Docker Health Checks
+
 All services include health checks:
+
 - **PostgreSQL**: `pg_isready`
 - **Redis**: `redis-cli ping`
 - **Application**: HTTP health endpoint
 - **Nginx**: Default upstream health
 
 ### Monitoring Commands
+
 ```bash
 # Check service status
 docker-compose ps
@@ -273,6 +290,7 @@ docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ## 📈 Scaling
 
 ### Horizontal Scaling
+
 ```bash
 # Scale application instances
 docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --scale app=3
@@ -281,9 +299,11 @@ docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --scale ap
 ```
 
 ### Resource Limits
+
 Configured in `docker-compose.prod.yml`:
+
 - **App**: 512MB RAM, 1 CPU
-- **PostgreSQL**: 256MB RAM, 0.5 CPU  
+- **PostgreSQL**: 256MB RAM, 0.5 CPU
 - **Redis**: 128MB RAM, 0.25 CPU
 
 ## 🐛 Troubleshooting
@@ -291,6 +311,7 @@ Configured in `docker-compose.prod.yml`:
 ### Common Issues
 
 1. **Port conflicts**
+
 ```bash
 # Check what's using port 3001
 sudo netstat -tulpn | grep 3001
@@ -298,6 +319,7 @@ sudo lsof -i :3001
 ```
 
 2. **Permission issues**
+
 ```bash
 # Fix Docker permissions
 sudo usermod -aG docker $USER
@@ -305,6 +327,7 @@ newgrp docker
 ```
 
 3. **Environment variables not loading**
+
 ```bash
 # Check .env file
 cat .env
@@ -313,6 +336,7 @@ docker-compose down && docker-compose up -d
 ```
 
 4. **Database connection issues**
+
 ```bash
 # Check PostgreSQL logs
 docker-compose logs postgres
@@ -322,11 +346,12 @@ docker-compose exec postgres psql -U postgres -d axum_auth -c "SELECT 1;"
 ```
 
 ### Log Locations
+
 ```bash
 # Application logs
 docker-compose logs app
 
-# Database logs  
+# Database logs
 docker-compose logs postgres
 
 # Redis logs
@@ -342,18 +367,21 @@ journalctl -u axum-app
 ## 🎯 Performance Optimization
 
 ### Docker Image Optimization
+
 - Multi-stage builds reduce image size by ~90%
 - Cargo dependency caching
 - Minimal runtime dependencies
 - Distroless base images for security
 
 ### Database Optimization
+
 - Connection pooling
 - Prepared statements
 - Indexed queries
 - Regular VACUUM operations
 
 ### Caching Strategy
+
 - Redis for session storage
 - Application-level caching
 - Nginx static file caching

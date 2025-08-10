@@ -51,6 +51,7 @@ tokio::spawn(async {
 ```
 
 The worker is configured with:
+
 - **Concurrency**: 2 (processes 2 jobs simultaneously)
 - **Backend**: Redis storage
 - **Queue Name**: "email-worker"
@@ -81,6 +82,7 @@ pub fn spawn_job_queue<F, Fut>(job_name: &str, future: F)
 ### Example 1: Password Reset Email (Current Implementation)
 
 **Before (Blocking - 4+ seconds):**
+
 ```rust
 // This awaits the Redis operation, slowing down HTTP response
 if let Err(e) = queue_password_reset_success_email(&email, &name, &time).await {
@@ -89,6 +91,7 @@ if let Err(e) = queue_password_reset_success_email(&email, &name, &time).await {
 ```
 
 **After (Non-blocking - <100ms):**
+
 ```rust
 // This spawns a background task and returns immediately
 let email = payload.email.clone();
@@ -103,6 +106,7 @@ tokio::spawn(async move {
 ### Example 2: Adding New Job Types
 
 #### Step 1: Define the Job Structure
+
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WelcomeEmailJob {
@@ -113,13 +117,14 @@ pub struct WelcomeEmailJob {
 ```
 
 #### Step 2: Create the Job Processor
+
 ```rust
 async fn process_welcome_email(
     job: WelcomeEmailJob,
     _data: Data<()>,
 ) -> Result<(), Error> {
     println!("🔄 [Apalis Worker] Processing welcome email for: {}", job.email);
-    
+
     // Your email sending logic here
     match send_welcome_email(&job.email, &job.name, &job.registration_date).await {
         Ok(_) => {
@@ -135,6 +140,7 @@ async fn process_welcome_email(
 ```
 
 #### Step 3: Add Queue Function
+
 ```rust
 pub async fn queue_welcome_email(
     email: &str,
@@ -150,7 +156,7 @@ pub async fn queue_welcome_email(
     };
 
     let mut storage = create_redis_storage().await?;
-    
+
     match storage.push(job).await {
         Ok(job_id) => {
             println!("✅ [Apalis] Welcome email queued with ID: {:?}", job_id);
@@ -165,6 +171,7 @@ pub async fn queue_welcome_email(
 ```
 
 #### Step 4: Register Worker in main.rs
+
 ```rust
 // Add to start_email_worker() function
 Monitor::new()
@@ -187,6 +194,7 @@ Monitor::new()
 ```
 
 #### Step 5: Use in Controller (Non-blocking)
+
 ```rust
 // In your registration controller
 let email = payload.email.clone();
@@ -250,11 +258,11 @@ WorkerBuilder::new("worker-name")
 
 ### Performance Improvements
 
-| Operation | Before (Blocking) | After (Apalis Queue) | Improvement |
-|-----------|------------------|---------------------|-------------|
-| Password Reset | ~4 seconds | <100ms | **40x faster** |
-| User Registration | ~2 seconds | <50ms | **40x faster** |
-| Email Notifications | ~3 seconds | <80ms | **37x faster** |
+| Operation           | Before (Blocking) | After (Apalis Queue) | Improvement    |
+| ------------------- | ----------------- | -------------------- | -------------- |
+| Password Reset      | ~4 seconds        | <100ms               | **40x faster** |
+| User Registration   | ~2 seconds        | <50ms                | **40x faster** |
+| Email Notifications | ~3 seconds        | <80ms                | **37x faster** |
 
 ### Reliability Features
 
@@ -298,11 +306,13 @@ redis-cli KEYS "apalis:*"
 ## Best Practices
 
 1. **Use non-blocking queuing in controllers**:
+
    ```rust
    tokio::spawn(async move { queue_job().await });
    ```
 
 2. **Handle errors gracefully**:
+
    ```rust
    if let Err(e) = queue_job().await {
        println!("WARNING: Failed to queue job: {}", e);
@@ -311,11 +321,13 @@ redis-cli KEYS "apalis:*"
    ```
 
 3. **Use appropriate concurrency**:
+
    - Email jobs: 1-2 workers (SMTP rate limits)
    - API calls: 5-10 workers (depending on rate limits)
    - Database operations: 3-5 workers
 
 4. **Add proper logging**:
+
    ```rust
    println!("🔄 [Worker] Processing {}", job_type);
    println!("✅ [Worker] Completed {}", job_type);
