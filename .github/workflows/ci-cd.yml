@@ -126,8 +126,6 @@ jobs:
             # Pull latest changes
             git pull origin master
 
-            # Use existing .env file in production (no copying needed)
-
             # Stop current services
             docker-compose down
 
