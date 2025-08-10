@@ -104,8 +104,23 @@ JWT_SECRET=your_secure_jwt_secret_key_change_in_production
 
 # Server Configuration
 HOST=127.0.0.1
-PORT=3000
+PORT=3001
+
+# Email Configuration (for password reset)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your_email@gmail.com
+SMTP_PASSWORD=your_app_specific_password
+FROM_EMAIL=your_email@gmail.com
+FROM_NAME=Axum Auth System
 ```
+
+**Email Setup Notes:**
+
+- For Gmail: Use App Passwords (not your regular password)
+- For other providers: Check their SMTP settings
+- Ensure "Less secure app access" is enabled if using regular passwords
+- Test email sending with a valid email account
 
 ### Installation
 
@@ -764,12 +779,14 @@ This authentication system is production-ready with enterprise-grade security, p
 
 ### Authentication Routes
 
-| Method | Endpoint         | Description       | Auth Required |
-| ------ | ---------------- | ----------------- | ------------- |
-| POST   | `/auth/register` | User registration | No            |
-| POST   | `/auth/login`    | User login        | No            |
-| POST   | `/auth/logout`   | User logout       | Yes           |
-| GET    | `/auth/profile`  | Get user profile  | Yes           |
+| Method | Endpoint                | Description             | Auth Required |
+| ------ | ----------------------- | ----------------------- | ------------- |
+| POST   | `/auth/register`        | User registration       | No            |
+| POST   | `/auth/login`           | User login              | No            |
+| POST   | `/auth/logout`          | User logout             | Yes           |
+| GET    | `/auth/profile`         | Get user profile        | Yes           |
+| POST   | `/auth/forgot-password` | Send OTP to email       | No            |
+| POST   | `/auth/reset-password`  | Reset password with OTP | No            |
 
 ### Admin Routes
 
@@ -936,6 +953,55 @@ curl -X DELETE http://localhost:3001/admin/clear-cache/john@example.com
 }
 ```
 
+**Forgot Password (Send OTP):**
+
+```bash
+curl -X POST http://localhost:3001/auth/forgot-password \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "john@example.com"
+  }'
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Password reset OTP sent to your email",
+  "data": {
+    "email": "john@example.com",
+    "otp_expires_in": "10 minutes"
+  }
+}
+```
+
+**Reset Password (Verify OTP and Update Password):**
+
+```bash
+curl -X POST http://localhost:3001/auth/reset-password \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "john@example.com",
+    "otp": "123456",
+    "new_password": "NewSecurePassword123!",
+    "confirm_password": "NewSecurePassword123!"
+  }'
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Password reset successfully",
+  "data": {
+    "email": "john@example.com",
+    "password_updated": true
+  }
+}
+```
+
 ### Error Response Format
 
 All errors follow a consistent structure:
@@ -997,6 +1063,33 @@ Examples:
     "email": "Invalid email format",
     "password": "Password must be at least 8 characters",
     "confirm_password": "Passwords do not match"
+  }
+}
+
+// Password reset - user not found
+{
+  "success": false,
+  "message": "Password reset failed",
+  "errors": {
+    "email": "User not found with this email address"
+  }
+}
+
+// Password reset - invalid OTP
+{
+  "success": false,
+  "message": "Password reset failed",
+  "errors": {
+    "otp": "Invalid or expired OTP"
+  }
+}
+
+// Password reset - email sending failed
+{
+  "success": false,
+  "message": "Failed to send password reset email",
+  "errors": {
+    "email": "Could not send email. Please try again later."
   }
 }
 ```

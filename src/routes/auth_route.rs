@@ -1,4 +1,6 @@
-use crate::controllers::auth_controller::{login, logout, profile, register, forgot_password, reset_password};
+use crate::controllers::auth_controller::{
+    forgot_password, login, logout, profile, register, reset_password,
+};
 use crate::middlewares::auth_middleware::auth_middleware;
 use axum::{
     middleware,

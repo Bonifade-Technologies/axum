@@ -270,32 +270,35 @@ use rand::Rng;
 
 // Generate a 6-digit OTP
 pub fn generate_otp() -> String {
-    let mut rng = rand::thread_rng();
-    format!("{:06}", rng.gen_range(100000..999999))
+    let mut rng = rand::rng();
+    format!("{:06}", rng.random_range(100000..999999))
 }
 
 // Store OTP in Redis with 10-minute expiration
 pub async fn store_otp(email: &str, otp: &str) -> Result<(), redis::RedisError> {
     let client = redis_client();
     let mut conn = client.get_multiplexed_async_connection().await?;
-    
+
     let otp_key = format!("otp:{}", email);
     let otp_expiry = 10 * 60; // 10 minutes in seconds
-    
-    conn.set_ex(otp_key, otp, otp_expiry).await?;
+
+    conn.set_ex::<_, _, ()>(otp_key, otp, otp_expiry).await?;
     Ok(())
 }
 
 // Verify OTP and remove it if valid
-pub async fn verify_and_consume_otp(email: &str, provided_otp: &str) -> Result<bool, redis::RedisError> {
+pub async fn verify_and_consume_otp(
+    email: &str,
+    provided_otp: &str,
+) -> Result<bool, redis::RedisError> {
     let client = redis_client();
     let mut conn = client.get_multiplexed_async_connection().await?;
-    
+
     let otp_key = format!("otp:{}", email);
-    
+
     // Get the stored OTP
     let stored_otp: Option<String> = conn.get(&otp_key).await?;
-    
+
     match stored_otp {
         Some(stored) => {
             if stored == provided_otp {
@@ -311,39 +314,42 @@ pub async fn verify_and_consume_otp(email: &str, provided_otp: &str) -> Result<b
 }
 
 // Update user password in both database and cache
-pub async fn update_user_password(email: &str, new_password: &str) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+pub async fn update_user_password(
+    email: &str,
+    new_password: &str,
+) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
     let hashed_password = hash_password(new_password);
-    
+
     // Update in database
-    let db = db_connection().await?;
-    
-    use sea_orm::{ActiveModelTrait, EntityTrait, Set, ColumnTrait, QueryFilter};
-    
+    let db = db_connection().await;
+
+    use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
+
     // Find the user
     let user_result = user::Entity::find()
         .filter(user::Column::Email.eq(email))
         .filter(user::Column::DeletedAt.is_null())
         .one(&db)
         .await?;
-    
+
     if let Some(user_model) = user_result {
         // Update password
         let mut user_active: user::ActiveModel = user_model.into();
         user_active.password = Set(hashed_password.clone());
         user_active.updated_at = Set(chrono::Utc::now().naive_utc());
-        
+
         let updated_user = user_active.update(&db).await?;
-        
+
         // Update cache with new password hash
         if let Some(cached_user) = get_complete_user_from_cache_or_db(email).await {
             let mut updated_cached_user = cached_user;
             updated_cached_user.password_hash = hashed_password;
             updated_cached_user.user_resource.updated_at = updated_user.updated_at.to_string();
-            
+
             // Re-cache the updated user data
             cache_complete_user_data(email, &updated_cached_user).await;
         }
-        
+
         Ok(true)
     } else {
         Ok(false) // User not found

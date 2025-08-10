@@ -24,11 +24,11 @@ pub static SMTP_PASSWORD: Lazy<String> = Lazy::new(|| {
 });
 
 pub static FROM_EMAIL: Lazy<String> = Lazy::new(|| {
-    env::var("FROM_EMAIL").unwrap_or_else(|| SMTP_USERNAME.clone())
+    env::var("FROM_EMAIL").unwrap_or_else(|_| SMTP_USERNAME.clone())
 });
 
 pub static FROM_NAME: Lazy<String> = Lazy::new(|| {
-    env::var("FROM_NAME").unwrap_or_else(|| "Axum Auth System".to_string())
+    env::var("FROM_NAME").unwrap_or_else(|_| "Axum Auth System".to_string())
 });
 
 // Create SMTP transport

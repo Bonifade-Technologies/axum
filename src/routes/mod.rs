@@ -1,11 +1,11 @@
-mod admin;
-mod auth;
+mod admin_route;
+mod auth_route;
 mod samples;
 mod users;
 
 use crate::{
-    routes::admin::admin_routes, routes::auth::auth_router, routes::samples::samples_router, 
-    routes::users::users_router, utils::api_response,
+    routes::admin_route::admin_routes, routes::auth_route::auth_router,
+    routes::samples::samples_router, routes::users::users_router, utils::api_response,
 };
 
 use axum::{http::StatusCode, routing::get, Router};
