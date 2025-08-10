@@ -1,4 +1,30 @@
 services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: axum_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-axum_auth}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "${DB_PORT:-5433}:5432"
+    networks:
+      - axum_network
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-axum_auth}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # Redis Cache/Job Queue
   redis:
     image: redis:7-alpine
@@ -29,6 +55,8 @@ services:
     ports:
       - "${APP_PORT:-3003}:3003"
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
     networks:
