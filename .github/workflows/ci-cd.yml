@@ -130,7 +130,10 @@ jobs:
             docker-compose down
 
             # Build and start services (this will build the image locally)
-            docker-compose up -d --build
+            docker-compose build --no-cache
+
+            # Then start
+            docker-compose up
 
             # Clean up unused images
             docker system prune -f --all
