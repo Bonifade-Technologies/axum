@@ -99,6 +99,40 @@ pub async fn queue_password_reset_success_email(
     }
 }
 
+// Helper function to queue jobs without blocking HTTP responses
+pub fn queue_password_reset_success_email_nonblocking(
+    email: String,
+    name: String,
+    reset_time: String,
+) {
+    tokio::spawn(async move {
+        if let Err(e) = queue_password_reset_success_email(&email, &name, &reset_time).await {
+            println!(
+                "❌ [Background Queue] Failed to queue password reset email for {}: {}",
+                email, e
+            );
+        } else {
+            println!("✅ [Background Queue] Password reset email queued for: {}", email);
+        }
+    });
+}
+
+// Generic helper for queuing any job type without blocking
+pub fn spawn_job_queue<F, Fut>(job_name: &str, future: F)
+where
+    F: FnOnce() -> Fut + Send + 'static,
+    Fut: std::future::Future<Output = Result<(), Box<dyn std::error::Error + Send + Sync>>> + Send + 'static,
+{
+    let job_name = job_name.to_string();
+    tokio::spawn(async move {
+        println!("🔄 [Background Queue] Starting job: {}", job_name);
+        match future().await {
+            Ok(_) => println!("✅ [Background Queue] Job completed: {}", job_name),
+            Err(e) => println!("❌ [Background Queue] Job failed {}: {}", job_name, e),
+        }
+    });
+}
+
 // Start the Apalis worker with Redis backend
 pub async fn start_email_worker() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());

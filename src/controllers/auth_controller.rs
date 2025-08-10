@@ -448,28 +448,29 @@ pub async fn reset_password(
                         );
                     }
 
-                    // Queue success email in background
+                    // Queue success email in background (truly async - don't await)
                     let reset_time = chrono::Utc::now()
                         .format("%B %d, %Y at %I:%M %p UTC")
                         .to_string();
-                    if let Err(e) = queue_password_reset_success_email(
-                        &payload.email,
-                        &user_data.name,
-                        &reset_time,
-                    )
-                    .await
-                    {
-                        println!(
-                            "WARNING: Failed to queue password reset success email: {}",
-                            e
-                        );
-                        // Don't fail the password reset if email queuing fails
-                    } else {
-                        println!(
-                            "✅ Password reset success email queued for: {}",
-                            payload.email
-                        );
-                    }
+                    let email = payload.email.clone();
+                    let name = user_data.name.clone();
+                    tokio::spawn(async move {
+                        if let Err(e) = queue_password_reset_success_email(
+                            &email,
+                            &name,
+                            &reset_time,
+                        ).await {
+                            println!(
+                                "WARNING: Failed to queue password reset success email: {}",
+                                e
+                            );
+                        } else {
+                            println!(
+                                "✅ Password reset success email queued for: {}",
+                                email
+                            );
+                        }
+                    });
 
                     api_response::success(
                         Some("Password reset successful"),
