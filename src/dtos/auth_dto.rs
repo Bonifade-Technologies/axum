@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use validator::{Validate, ValidationError, ValidationErrors};
+use validator::{Validate, ValidationErrors};
 
 #[derive(Debug, Deserialize, Serialize, Validate)]
 #[serde(default)]
@@ -8,10 +8,7 @@ pub struct SignupDto {
     #[validate(length(min = 1, message = "name is required"))]
     pub name: String,
 
-    #[validate(
-        email(message = "invalid email"),
-        custom(function = "validate_unique_email")
-    )]
+    #[validate(email(message = "invalid email"))]
     #[validate(length(min = 1, message = "email is required"))]
     pub email: String,
 
@@ -44,10 +41,7 @@ impl Default for SignupDto {
 #[derive(Debug, Deserialize, Serialize, Validate)]
 #[serde(default)]
 pub struct LoginDto {
-    #[validate(
-        email(message = "invalid email"),
-        custom(function = "validate_existing_email")
-    )]
+    #[validate(email(message = "invalid email"))]
     #[validate(length(min = 1, message = "email is required"))]
     pub email: String,
 
@@ -77,26 +71,4 @@ pub fn validation_errors_to_map(errors: &ValidationErrors) -> HashMap<String, St
         }
     }
     map
-}
-
-fn validate_unique_email(email: &str) -> Result<(), ValidationError> {
-    if email == "ade@abc.com" {
-        // the value of the email will automatically be added later
-        return Err(
-            ValidationError::new("email_taken").with_message("Email is already taken".into())
-        );
-    }
-
-    Ok(())
-}
-
-fn validate_existing_email(email: &str) -> Result<(), ValidationError> {
-    if email != "ade@abc.com" {
-        // the value of the email will automatically be added later
-        return Err(
-            ValidationError::new("terrible_email").with_message("User already exists".into())
-        );
-    }
-
-    Ok(())
 }

@@ -21,6 +21,13 @@ pub struct Claims {
     pub iat: usize,
 }
 
+// Complete cached user data including password hash
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CachedUser {
+    pub user_resource: UserResource,
+    pub password_hash: String,
+}
+
 // Helper functions for password hashing
 pub fn hash_password(password: &str) -> String {
     hash(password, DEFAULT_COST).unwrap()
@@ -96,6 +103,14 @@ pub async fn exist_email(email: &str) -> bool {
 
 // Smart cache functions with sliding window TTL
 pub async fn get_user_from_cache_or_db(email: &str) -> Option<UserResource> {
+    if let Some(cached_user) = get_complete_user_from_cache_or_db(email).await {
+        return Some(cached_user.user_resource);
+    }
+    None
+}
+
+// Get complete user data including password hash from cache or database
+pub async fn get_complete_user_from_cache_or_db(email: &str) -> Option<CachedUser> {
     let client = redis_client();
 
     // Try Redis first
@@ -110,12 +125,15 @@ pub async fn get_user_from_cache_or_db(email: &str) -> Option<UserResource> {
             let _: Result<(), redis::RedisError> =
                 conn.expire(&redis_key, USER_CACHE_TTL as i64).await;
 
-            // Parse and return cached user
-            if let Ok(user) = serde_json::from_str::<UserResource>(&user_json) {
-                return Some(user);
+            // Parse and return cached user with password
+            if let Ok(cached_user) = serde_json::from_str::<CachedUser>(&user_json) {
+                println!("✅ Cache HIT for user: {}", email);
+                return Some(cached_user);
             }
         }
     }
+
+    println!("💾 Cache MISS for user: {} - fetching from database", email);
 
     // Not in cache or cache failed - fetch from database
     let db_user = user::Entity::find()
@@ -126,28 +144,68 @@ pub async fn get_user_from_cache_or_db(email: &str) -> Option<UserResource> {
 
     if let Ok(Some(user_model)) = db_user {
         let user_resource = UserResource::from(&user_model);
+        let cached_user = CachedUser {
+            user_resource: user_resource.clone(),
+            password_hash: user_model.password.clone(),
+        };
 
-        // Store in cache for future requests
-        cache_user_data(email, &user_resource).await;
+        // Store complete user data in cache for future requests
+        cache_complete_user_data(email, &cached_user).await;
 
-        return Some(user_resource);
+        return Some(cached_user);
     }
 
     None
 }
 
+pub async fn cache_complete_user_data(email: &str, cached_user: &CachedUser) {
+    let client = redis_client();
+
+    if let Ok(mut conn) = client.get_multiplexed_tokio_connection().await {
+        if let Ok(user_json) = serde_json::to_string(cached_user) {
+            let redis_key = format!("user:{}", email);
+
+            // Store with smart TTL based on user activity
+            let ttl = get_smart_ttl_for_user(email).await;
+            let _: Result<(), redis::RedisError> = conn.set_ex(&redis_key, user_json, ttl).await;
+
+            println!(
+                "💾 Cached complete user data for: {} with TTL: {} seconds",
+                email, ttl
+            );
+        }
+    }
+}
+
 pub async fn cache_user_data(email: &str, user: &UserResource) {
+    // This is kept for backward compatibility, but we recommend using cache_complete_user_data
     let client = redis_client();
 
     if let Ok(mut conn) = client.get_multiplexed_tokio_connection().await {
         if let Ok(user_json) = serde_json::to_string(user) {
-            let redis_key = format!("user:{}", email);
+            let redis_key = format!("user_basic:{}", email);
 
             // Store with smart TTL based on user activity
             let ttl = get_smart_ttl_for_user(email).await;
             let _: Result<(), redis::RedisError> = conn.set_ex(&redis_key, user_json, ttl).await;
         }
     }
+}
+
+// Authenticate user with cached data (no DB call needed!)
+pub async fn authenticate_user(email: &str, password: &str) -> Option<UserResource> {
+    if let Some(cached_user) = get_complete_user_from_cache_or_db(email).await {
+        if verify_password(password, &cached_user.password_hash) {
+            // Increment activity for smart TTL
+            increment_user_activity(email).await;
+
+            println!("🔐 Password verified from cache for user: {}", email);
+            return Some(cached_user.user_resource);
+        } else {
+            println!("❌ Invalid password for user: {}", email);
+        }
+    }
+    None
 }
 
 async fn get_smart_ttl_for_user(email: &str) -> u64 {

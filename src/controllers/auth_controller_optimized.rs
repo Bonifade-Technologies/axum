@@ -5,14 +5,14 @@ use crate::extractors::json_extractor::ValidatedJson;
 use crate::resources::user_resource::UserResource;
 use crate::utils::api_response;
 use crate::utils::auth::{
-    authenticate_user, cache_complete_user_data, exist_email, generate_jwt_token, hash_password,
-    unique_email, CachedUser,
+    generate_jwt_token, hash_password, unique_email,
+    exist_email, authenticate_user, cache_complete_user_data, CachedUser,
 };
 
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Extension};
 use chrono::Utc;
 use redis::AsyncCommands;
-use sea_orm::{ActiveModelTrait, DatabaseConnection, Set};
+use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set};
 
 pub async fn register(
     State(db): State<DatabaseConnection>,
@@ -70,7 +70,7 @@ pub async fn register(
             let client = redis_client();
             if let Ok(mut conn) = client.get_multiplexed_tokio_connection().await {
                 let resource = UserResource::from(&user);
-
+                
                 // Cache complete user data including password hash
                 let cached_user = CachedUser {
                     user_resource: resource.clone(),
@@ -163,11 +163,7 @@ pub async fn login(
         let client = redis_client();
         if let Ok(mut conn) = client.get_multiplexed_tokio_connection().await {
             let _: Result<(), redis::RedisError> = conn
-                .set_ex(
-                    format!("token:{}", token),
-                    payload.email.clone(),
-                    24 * 60 * 60,
-                )
+                .set_ex(format!("token:{}", token), payload.email.clone(), 24 * 60 * 60)
                 .await;
         }
 

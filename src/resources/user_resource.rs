@@ -1,7 +1,7 @@
 use crate::database::users::Model as UserModel;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct UserResource {
     pub id: String,
     pub name: String,
