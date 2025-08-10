@@ -73,26 +73,6 @@ else
     print_status "Repository already cloned"
 fi
 
-# Create environment file
-if [ ! -f ".env" ]; then
-    print_status "Creating environment file..."
-    
-    # Copy example environment
-    cp .env.example .env
-    
-    print_warning "Please edit .env file with your production settings:"
-    print_warning "nano .env"
-    print_warning ""
-    print_warning "Required variables to configure:"
-    print_warning "- DATABASE_URL"
-    print_warning "- REDIS_URL" 
-    print_warning "- JWT_SECRET (generate a secure random string)"
-    print_warning "- SMTP_* (email configuration)"
-    print_warning "- All other environment variables"
-else
-    print_status "Environment file already exists"
-fi
-
 # Create systemd service for auto-restart
 SERVICE_FILE="/etc/systemd/system/axum-app.service"
 if [ ! -f "$SERVICE_FILE" ]; then
