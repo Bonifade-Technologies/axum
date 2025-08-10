@@ -231,8 +231,36 @@ pub async fn increment_user_activity(email: &str) {
     if let Ok(mut conn) = client.get_multiplexed_tokio_connection().await {
         let activity_key = format!("activity:{}", email);
 
-        // Increment login counter with 30-day expiry
+        // Increment activity counter with sliding window TTL
         let _: Result<i64, redis::RedisError> = conn.incr(&activity_key, 1).await;
-        let _: Result<(), redis::RedisError> = conn.expire(&activity_key, 30 * 24 * 60 * 60).await;
+        let _: Result<(), redis::RedisError> =
+            conn.expire(&activity_key, ACTIVE_USER_TTL as i64).await;
     }
+}
+
+// Invalidate all existing tokens for a user (for secure single-session login)
+pub async fn invalidate_all_user_tokens(email: &str) -> Result<i32, redis::RedisError> {
+    let client = redis_client();
+    let mut conn = client.get_multiplexed_async_connection().await?;
+    
+    // Get all token keys
+    let token_pattern = "token:*";
+    let all_token_keys: Vec<String> = conn.keys(token_pattern).await?;
+    
+    let mut invalidated_count = 0;
+    
+    // Check each token to see if it belongs to this user
+    for token_key in all_token_keys {
+        let stored_email: Result<String, redis::RedisError> = conn.get(&token_key).await;
+        
+        if let Ok(stored_email) = stored_email {
+            if stored_email == email {
+                // Delete this token
+                let deleted: i32 = conn.del(&token_key).await?;
+                invalidated_count += deleted;
+            }
+        }
+    }
+    
+    Ok(invalidated_count)
 }

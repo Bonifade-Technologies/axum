@@ -6,7 +6,7 @@ use crate::resources::user_resource::UserResource;
 use crate::utils::api_response;
 use crate::utils::auth::{
     authenticate_user, cache_complete_user_data, exist_email, generate_jwt_token, hash_password,
-    unique_email, CachedUser,
+    invalidate_all_user_tokens, unique_email, verify_password, CachedUser,
 };
 
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Extension};
@@ -29,7 +29,7 @@ pub async fn register(
         return api_response::failure(
             Some("User with email already exists"),
             Some(error_response),
-            Some(StatusCode::CONFLICT),
+            Some(StatusCode::UNPROCESSABLE_ENTITY),
         );
     }
 
@@ -38,9 +38,9 @@ pub async fn register(
 
     let user = user::ActiveModel {
         id: Set(cuid2::create_id()),
-        name: Set("User".to_string()), // Default name, can be updated later
+        name: Set(payload.name.clone()),
         email: Set(payload.email.clone()),
-        phone: Set(None), // Optional field
+        phone: Set(Some(payload.phone.clone())),
         password: Set(hashed_password),
         created_at: Set(now),
         updated_at: Set(now),
@@ -51,6 +51,18 @@ pub async fn register(
 
     match res {
         Ok(user) => {
+            // Verify the password hash before generating token
+            if !verify_password(&payload.password, &user.password) {
+                let error_response = serde_json::json!({
+                    "password": "Password verification failed after hashing"
+                });
+                return api_response::failure(
+                    Some("Registration failed"),
+                    Some(error_response),
+                    Some(StatusCode::INTERNAL_SERVER_ERROR),
+                );
+            }
+
             // Generate JWT token
             let token = match generate_jwt_token(&user.email) {
                 Ok(t) => t,
@@ -130,20 +142,33 @@ pub async fn login(
     State(_db): State<DatabaseConnection>,
     ValidatedJson(payload): ValidatedJson<LoginDto>,
 ) -> impl IntoResponse {
-    // First check if user exists using our efficient exist_email function
     if !exist_email(&payload.email).await {
         let error_response = serde_json::json!({
-            "email": "User not found"
+            "email": "User not found, kindly register"
         });
         return api_response::failure(
             Some("Login failed"),
             Some(error_response),
-            Some(StatusCode::NOT_FOUND),
+            Some(StatusCode::UNPROCESSABLE_ENTITY),
         );
     }
 
     // Use the smart authentication function (cache-first with password verification)
     if let Some(user_resource) = authenticate_user(&payload.email, &payload.password).await {
+        // SECURITY: Invalidate all existing tokens for this user before creating a new one
+        // This ensures only one active session per user (you can modify this behavior)
+        match invalidate_all_user_tokens(&payload.email).await {
+            Ok(count) => {
+                if count > 0 {
+                    println!("DEBUG: Invalidated {} existing tokens for {}", count, payload.email);
+                }
+            }
+            Err(e) => {
+                println!("DEBUG: Failed to invalidate old tokens: {}", e);
+                // We continue anyway - this shouldn't block login
+            }
+        }
+
         // Generate JWT token
         let token = match generate_jwt_token(&payload.email) {
             Ok(t) => t,
@@ -177,10 +202,14 @@ pub async fn login(
             "token": token
         });
 
-        api_response::success(Some("Login successful"), Some(response), None)
+        api_response::success(
+            Some("Login successful"),
+            Some(response),
+            Some(StatusCode::OK),
+        )
     } else {
         let error_response = serde_json::json!({
-            "password": "Invalid password"
+            "password": "incorrect password"
         });
         api_response::failure(
             Some("Login failed"),
@@ -193,4 +222,57 @@ pub async fn login(
 // Profile function - protected by auth middleware
 pub async fn profile(Extension(user): Extension<UserResource>) -> impl IntoResponse {
     api_response::success(Some("User profile"), Some(user), None)
+}
+
+// Logout function - invalidates the current token
+pub async fn logout(
+    axum::extract::Extension(user): axum::extract::Extension<UserResource>,
+) -> impl IntoResponse {
+    // Since we have the user from middleware, we can invalidate all their tokens
+    // This is actually more secure than just invalidating the current token
+    
+    let client = redis_client();
+    match client.get_multiplexed_async_connection().await {
+        Ok(mut conn) => {
+            // Get all tokens for this user and delete them
+            let token_pattern = "token:*";
+            let all_token_keys: Result<Vec<String>, redis::RedisError> = conn.keys(token_pattern).await;
+            
+            let mut invalidated_count = 0;
+            
+            if let Ok(token_keys) = all_token_keys {
+                for token_key in token_keys {
+                    let stored_email: Result<String, redis::RedisError> = conn.get(&token_key).await;
+                    
+                    if let Ok(stored_email) = stored_email {
+                        if stored_email == user.email {
+                            let deleted: Result<i32, redis::RedisError> = conn.del(&token_key).await;
+                            if let Ok(count) = deleted {
+                                invalidated_count += count;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            api_response::success(
+                Some("Logout successful"),
+                Some(serde_json::json!({
+                    "message": "All sessions invalidated successfully",
+                    "invalidated_tokens": invalidated_count
+                })),
+                Some(StatusCode::OK),
+            )
+        }
+        Err(e) => {
+            let error_response = serde_json::json!({
+                "redis": format!("Redis connection failed: {}", e)
+            });
+            api_response::failure(
+                Some("Logout failed"),
+                Some(error_response),
+                Some(StatusCode::INTERNAL_SERVER_ERROR),
+            )
+        }
+    }
 }

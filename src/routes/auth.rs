@@ -1,4 +1,4 @@
-use crate::controllers::auth_controller::{login, profile, register};
+use crate::controllers::auth_controller::{login, logout, profile, register};
 use crate::middlewares::auth_middleware::auth_middleware;
 use axum::{
     middleware,
@@ -14,5 +14,9 @@ pub fn auth_router() -> Router<DatabaseConnection> {
         .route(
             "/profile",
             get(profile).route_layer(middleware::from_fn(auth_middleware)),
+        )
+        .route(
+            "/logout",
+            post(logout).route_layer(middleware::from_fn(auth_middleware)),
         )
 }
