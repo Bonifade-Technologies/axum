@@ -93,7 +93,9 @@ fn validate_unique_email(email: &str) -> Result<(), ValidationError> {
 fn validate_existing_email(email: &str) -> Result<(), ValidationError> {
     if email != "ade@abc.com" {
         // the value of the email will automatically be added later
-        return Err(ValidationError::new("terrible_email"));
+        return Err(
+            ValidationError::new("terrible_email").with_message("User already exists".into())
+        );
     }
 
     Ok(())

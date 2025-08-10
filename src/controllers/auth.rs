@@ -4,38 +4,17 @@ use crate::dtos::auth_dto::{LoginDto, SignupDto};
 use crate::extractors::json_extractor::ValidatedJson;
 use crate::resources::user_resource::UserResource;
 use crate::utils::api_response;
+use crate::utils::auth::{generate_jwt_token, hash_password, verify_password};
 
-use axum::{
-    extract::State,
-    http::{Request, StatusCode},
-    middleware::{self, Next},
-    response::IntoResponse,
-    Extension,
-};
+use axum::{extract::State, http::StatusCode, response::IntoResponse, Extension};
 use chrono::Utc;
 use redis::AsyncCommands;
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set};
-use sha2::{Digest, Sha256};
 
 pub async fn register(
     State(db): State<DatabaseConnection>,
     ValidatedJson(payload): ValidatedJson<SignupDto>,
 ) -> impl IntoResponse {
-    // Double-check email uniqueness in database
-    let existing_user = user::Entity::find()
-        .filter(user::Column::Email.eq(&payload.email))
-        .filter(user::Column::DeletedAt.is_null())
-        .one(&db)
-        .await;
-
-    if let Ok(Some(_)) = existing_user {
-        return api_response::failure(
-            Some("Registration failed"),
-            Some("Email is already taken".to_string()),
-            Some(StatusCode::BAD_REQUEST),
-        );
-    }
-
     let now = Utc::now().naive_utc();
 
     // Hash the password
@@ -56,9 +35,21 @@ pub async fn register(
 
     match res {
         Ok(user) => {
+            // Generate JWT token
+            let token = match generate_jwt_token(&user.email) {
+                Ok(t) => t,
+                Err(_) => {
+                    return api_response::failure(
+                        Some("Registration successful but token generation failed"),
+                        Some("Failed to generate authentication token".to_string()),
+                        Some(StatusCode::INTERNAL_SERVER_ERROR),
+                    );
+                }
+            };
+
             // Store user in Redis with email as key
             let client = redis_client();
-            if let Ok(mut conn) = client.get_async_connection().await {
+            if let Ok(mut conn) = client.get_multiplexed_async_connection().await {
                 let resource = UserResource::from(&user);
                 let user_json = serde_json::to_string(&resource).unwrap();
 
@@ -67,8 +58,7 @@ pub async fn register(
                     .set_ex(format!("user:{}", user.email), user_json, 60 * 60 * 24)
                     .await;
 
-                // Generate token
-                let token = generate_token();
+                // Store JWT token in Redis
                 let _: Result<(), redis::RedisError> = conn
                     .set_ex(format!("token:{}", token), user.email.clone(), 60 * 60 * 24)
                     .await;
@@ -85,9 +75,15 @@ pub async fn register(
                     Some(StatusCode::CREATED),
                 )
             } else {
+                // Redis failed but registration was successful
+                let response = serde_json::json!({
+                    "user": UserResource::from(&user),
+                    "token": token
+                });
+
                 api_response::success(
-                    Some("User registered successfully, but session creation failed"),
-                    Some(UserResource::from(&user)),
+                    Some("User registered successfully"),
+                    Some(response),
                     Some(StatusCode::CREATED),
                 )
             }
@@ -115,12 +111,21 @@ pub async fn login(
         Ok(Some(user)) => {
             // Verify password
             if verify_password(&payload.password, &user.password) {
-                // Generate token
-                let token = generate_token();
+                // Generate JWT token
+                let token = match generate_jwt_token(&user.email) {
+                    Ok(t) => t,
+                    Err(_) => {
+                        return api_response::failure(
+                            Some("Login successful but token generation failed"),
+                            Some("Failed to generate authentication token".to_string()),
+                            Some(StatusCode::INTERNAL_SERVER_ERROR),
+                        );
+                    }
+                };
 
                 // Store token and user in Redis
                 let client = redis_client();
-                if let Ok(mut conn) = client.get_async_connection().await {
+                if let Ok(mut conn) = client.get_multiplexed_async_connection().await {
                     let resource = UserResource::from(&user);
                     let user_json = serde_json::to_string(&resource).unwrap();
 
@@ -175,90 +180,7 @@ pub async fn login(
     }
 }
 
-// Authentication middleware
-pub async fn auth_middleware<B>(request: Request<B>, next: Next<B>) -> impl IntoResponse {
-    // Get token from Authorization header
-    let auth_header = request.headers().get("Authorization");
-    match auth_header {
-        Some(header) => {
-            if let Ok(auth_str) = header.to_str() {
-                if auth_str.starts_with("Bearer ") {
-                    let token = auth_str.trim_start_matches("Bearer ").trim();
-
-                    // Verify token with Redis
-                    let client = redis_client();
-                    if let Ok(mut conn) = client.get_async_connection().await {
-                        if let Ok(Some(user_email)) = conn
-                            .get::<_, Option<String>>(format!("token:{}", token))
-                            .await
-                        {
-                            // Get user from Redis or fall back to database
-                            if let Ok(Some(user_json)) = conn
-                                .get::<_, Option<String>>(format!("user:{}", user_email))
-                                .await
-                            {
-                                if let Ok(user) = serde_json::from_str::<UserResource>(&user_json) {
-                                    let req = request.with_extension(user);
-                                    return next.run(req).await;
-                                }
-                            }
-
-                            // If user not in Redis, get from database
-                            let db = request.extensions().get::<DatabaseConnection>();
-                            if let Some(db) = db {
-                                let user_result = user::Entity::find()
-                                    .filter(user::Column::Email.eq(user_email))
-                                    .filter(user::Column::DeletedAt.is_null())
-                                    .one(db)
-                                    .await;
-
-                                if let Ok(Some(user)) = user_result {
-                                    let user_resource = UserResource::from(&user);
-                                    let req = request.with_extension(user_resource);
-                                    return next.run(req).await;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        None => {}
-    }
-
-    // Token is invalid or missing
-    api_response::failure(
-        Some("Unauthorized"),
-        Some("Authentication required".to_string()),
-        Some(StatusCode::UNAUTHORIZED),
-    )
-    .into_response()
-}
-
 // Profile function - protected by auth middleware
 pub async fn profile(Extension(user): Extension<UserResource>) -> impl IntoResponse {
     api_response::success(Some("User profile"), Some(user), None)
-}
-
-// Helper functions
-fn hash_password(password: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(password.as_bytes());
-    format!("{:x}", hasher.finalize())
-}
-
-fn verify_password(input: &str, stored: &str) -> bool {
-    let hashed_input = hash_password(input);
-    hashed_input == stored
-}
-
-fn generate_token() -> String {
-    use rand::distributions::Alphanumeric;
-    use rand::{thread_rng, Rng};
-
-    thread_rng()
-        .sample_iter(&Alphanumeric)
-        .take(32)
-        .map(char::from)
-        .collect()
 }
