@@ -6,9 +6,11 @@ use crate::extractors::json_extractor::ValidatedJson;
 use crate::resources::user_resource::UserResource;
 use crate::utils::api_response;
 use crate::utils::auth::{
-    authenticate_user, cache_complete_user_data, exist_email, generate_jwt_token, generate_otp,
-    get_user_from_cache_or_db, hash_password, invalidate_all_user_tokens, store_otp, unique_email,
-    update_user_password, verify_and_consume_otp, verify_password, CachedUser,
+    authenticate_user, cache_complete_user_data, can_request_forgot_password, exist_email,
+    generate_jwt_token, generate_otp, get_forgot_password_rate_limit_remaining,
+    get_user_from_cache_or_db, hash_password, invalidate_all_user_tokens,
+    set_forgot_password_rate_limit, store_otp, unique_email, update_user_password,
+    verify_and_consume_otp, verify_password, CachedUser,
 };
 
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Extension};
@@ -285,10 +287,41 @@ pub async fn logout(
     }
 }
 
-// Forgot password function - sends OTP to user's email
+// Forgot password function - sends OTP to user's email with rate limiting
 pub async fn forgot_password(
     ValidatedJson(payload): ValidatedJson<ForgotPasswordDto>,
 ) -> impl IntoResponse {
+    // Check rate limiting first (5-minute cooldown)
+    match can_request_forgot_password(&payload.email).await {
+        Ok(can_request) => {
+            if !can_request {
+                // Get remaining time for better user experience
+                let remaining_seconds = get_forgot_password_rate_limit_remaining(&payload.email)
+                    .await
+                    .unwrap_or(0);
+
+                let remaining_minutes = (remaining_seconds + 59) / 60; // Round up to next minute
+
+                let error_response = serde_json::json!({
+                    "email": format!("Please wait {} minute(s) before requesting another password reset", remaining_minutes),
+                    "rate_limit": {
+                        "remaining_seconds": remaining_seconds,
+                        "remaining_minutes": remaining_minutes
+                    }
+                });
+                return api_response::failure(
+                    Some("Rate limit exceeded"),
+                    Some(error_response),
+                    Some(StatusCode::TOO_MANY_REQUESTS),
+                );
+            }
+        }
+        Err(e) => {
+            println!("ERROR: Rate limit check failed: {}", e);
+            // Continue anyway - don't block user due to Redis issues
+        }
+    }
+
     // Check if user exists
     if !exist_email(&payload.email).await {
         let error_response = serde_json::json!({
@@ -324,15 +357,26 @@ pub async fn forgot_password(
         Ok(_) => {
             // Send OTP email
             match send_otp_email(&payload.email, &user_data.name, &otp).await {
-                Ok(_) => api_response::success(
-                    Some("OTP sent successfully"),
-                    Some(serde_json::json!({
-                        "message": "Password reset OTP has been sent to your email",
-                        "email": payload.email,
-                        "expires_in_minutes": 10
-                    })),
-                    Some(StatusCode::OK),
-                ),
+                Ok(_) => {
+                    // Set rate limit after successful email send
+                    if let Err(e) = set_forgot_password_rate_limit(&payload.email).await {
+                        println!("WARNING: Failed to set rate limit: {}", e);
+                        // Continue anyway - email was sent successfully
+                    }
+
+                    api_response::success(
+                        Some("OTP sent successfully"),
+                        Some(serde_json::json!({
+                            "message": "Password reset OTP has been sent to your email",
+                            "email": payload.email,
+                            "expires_in_minutes": 10,
+                            "rate_limit": {
+                                "next_request_allowed_in_minutes": 5
+                            }
+                        })),
+                        Some(StatusCode::OK),
+                    )
+                }
                 Err(e) => {
                     println!("ERROR: Failed to send email: {}", e);
                     let error_response = serde_json::json!({

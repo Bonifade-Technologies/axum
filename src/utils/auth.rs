@@ -355,3 +355,60 @@ pub async fn update_user_password(
         Ok(false)
     }
 }
+
+// Rate limiting for forgot password (5-minute cooldown)
+const FORGOT_PASSWORD_RATE_LIMIT: u64 = 5 * 60; // 5 minutes in seconds
+
+// Check if user can request forgot password (rate limiting)
+pub async fn can_request_forgot_password(email: &str) -> Result<bool, redis::RedisError> {
+    let client = redis_client();
+    let mut conn = client.get_multiplexed_async_connection().await?;
+
+    let rate_limit_key = format!("rate_limit:forgot_password:{}", email);
+
+    // Check if rate limit key exists
+    let exists: bool = conn.exists(&rate_limit_key).await?;
+
+    if exists {
+        // Get remaining TTL
+        let ttl: i64 = conn.ttl(&rate_limit_key).await.unwrap_or(0);
+        println!(
+            "🚫 Rate limit active for {}: {} seconds remaining",
+            email, ttl
+        );
+        Ok(false)
+    } else {
+        Ok(true)
+    }
+}
+
+// Set rate limit for forgot password
+pub async fn set_forgot_password_rate_limit(email: &str) -> Result<(), redis::RedisError> {
+    let client = redis_client();
+    let mut conn = client.get_multiplexed_async_connection().await?;
+
+    let rate_limit_key = format!("rate_limit:forgot_password:{}", email);
+
+    // Set rate limit with 5-minute expiration
+    conn.set_ex::<_, _, ()>(rate_limit_key, "1", FORGOT_PASSWORD_RATE_LIMIT)
+        .await?;
+    println!(
+        "⏰ Rate limit set for {}: {} seconds",
+        email, FORGOT_PASSWORD_RATE_LIMIT
+    );
+
+    Ok(())
+}
+
+// Get remaining time for rate limit
+pub async fn get_forgot_password_rate_limit_remaining(
+    email: &str,
+) -> Result<i64, redis::RedisError> {
+    let client = redis_client();
+    let mut conn = client.get_multiplexed_async_connection().await?;
+
+    let rate_limit_key = format!("rate_limit:forgot_password:{}", email);
+    let ttl: i64 = conn.ttl(&rate_limit_key).await.unwrap_or(0);
+
+    Ok(ttl)
+}
