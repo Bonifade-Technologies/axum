@@ -136,7 +136,7 @@ jobs:
             docker-compose up
 
             # Clean up unused images
-            docker image prune -f --all
+            docker system prune -f --all
 
             # Health check
             sleep 30
