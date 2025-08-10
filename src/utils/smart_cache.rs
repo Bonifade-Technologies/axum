@@ -1,7 +1,5 @@
 use crate::{
-    config::redis::redis_client,
-    database::users as user,
-    config::database::db_connection,
+    config::database::db_connection, config::redis::redis_client, database::users as user,
     resources::user_resource::UserResource,
 };
 use redis::AsyncCommands;
@@ -19,22 +17,22 @@ const ACTIVE_USER_TTL: u64 = 30 * 24 * 60 * 60; // 30 days for very active users
 /// 4. Extends TTL on every access
 pub async fn get_user_with_smart_cache(email: &str) -> Option<UserResource> {
     let client = redis_client();
-    
+
     // Try Redis first
     if let Ok(mut conn) = client.get_multiplexed_tokio_connection().await {
         let redis_key = format!("user:{}", email);
-        
+
         // Check if user exists in cache
         let cached_user: Result<String, redis::RedisError> = conn.get(&redis_key).await;
-        
+
         if let Ok(user_json) = cached_user {
             // User found in cache - extend TTL (sliding window)
             let new_ttl = get_smart_ttl_for_user(email).await;
             let _: Result<(), redis::RedisError> = conn.expire(&redis_key, new_ttl as i64).await;
-            
+
             // Increment activity counter
             increment_user_activity(email).await;
-            
+
             // Parse and return cached user
             if let Ok(user) = serde_json::from_str::<UserResource>(&user_json) {
                 println!("✅ Cache HIT for user: {}", email);
@@ -42,40 +40,40 @@ pub async fn get_user_with_smart_cache(email: &str) -> Option<UserResource> {
             }
         }
     }
-    
+
     println!("💾 Cache MISS for user: {} - fetching from database", email);
-    
+
     // Not in cache or cache failed - fetch from database
     let db_user = user::Entity::find()
         .filter(user::Column::Email.eq(email))
         .filter(user::Column::DeletedAt.is_null())
         .one(&db_connection().await)
         .await;
-    
+
     if let Ok(Some(user_model)) = db_user {
         let user_resource = UserResource::from(&user_model);
-        
+
         // Store in cache for future requests
         cache_user_with_smart_ttl(email, &user_resource).await;
-        
+
         return Some(user_resource);
     }
-    
+
     None
 }
 
 /// Cache user data with smart TTL based on activity
 pub async fn cache_user_with_smart_ttl(email: &str, user: &UserResource) {
     let client = redis_client();
-    
+
     if let Ok(mut conn) = client.get_multiplexed_tokio_connection().await {
         if let Ok(user_json) = serde_json::to_string(user) {
             let redis_key = format!("user:{}", email);
-            
+
             // Store with smart TTL based on user activity
             let ttl = get_smart_ttl_for_user(email).await;
             let _: Result<(), redis::RedisError> = conn.set_ex(&redis_key, user_json, ttl).await;
-            
+
             println!("💾 Cached user: {} with TTL: {} seconds", email, ttl);
         }
     }
@@ -84,26 +82,44 @@ pub async fn cache_user_with_smart_ttl(email: &str, user: &UserResource) {
 /// Determine TTL based on user activity
 async fn get_smart_ttl_for_user(email: &str) -> u64 {
     let client = redis_client();
-    
+
     if let Ok(mut conn) = client.get_multiplexed_tokio_connection().await {
         let activity_key = format!("activity:{}", email);
         let login_count: Result<i64, redis::RedisError> = conn.get(&activity_key).await;
-        
+
         match login_count {
             Ok(count) if count > 20 => {
-                println!("🔥 Very active user ({}+ logins): {} - using {} day TTL", count, email, ACTIVE_USER_TTL / (24 * 60 * 60));
+                println!(
+                    "🔥 Very active user ({}+ logins): {} - using {} day TTL",
+                    count,
+                    email,
+                    ACTIVE_USER_TTL / (24 * 60 * 60)
+                );
                 ACTIVE_USER_TTL
-            },
+            }
             Ok(count) if count > 5 => {
-                println!("⚡ Regular user ({} logins): {} - using {} day TTL", count, email, USER_CACHE_TTL / (24 * 60 * 60));
+                println!(
+                    "⚡ Regular user ({} logins): {} - using {} day TTL",
+                    count,
+                    email,
+                    USER_CACHE_TTL / (24 * 60 * 60)
+                );
                 USER_CACHE_TTL
-            },
+            }
             Ok(count) => {
-                println!("👤 New user ({} logins): {} - using {} hour TTL", count, email, SESSION_TTL / (60 * 60));
+                println!(
+                    "👤 New user ({} logins): {} - using {} hour TTL",
+                    count,
+                    email,
+                    SESSION_TTL / (60 * 60)
+                );
                 SESSION_TTL
-            },
+            }
             Err(_) => {
-                println!("❓ Could not get activity for: {} - using default TTL", email);
+                println!(
+                    "❓ Could not get activity for: {} - using default TTL",
+                    email
+                );
                 USER_CACHE_TTL
             }
         }
