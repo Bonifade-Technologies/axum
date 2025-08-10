@@ -284,3 +284,166 @@ pub async fn logout(
         }
     }
 }
+
+// Forgot password function - sends OTP to user's email
+pub async fn forgot_password(
+    ValidatedJson(payload): ValidatedJson<ForgotPasswordDto>,
+) -> impl IntoResponse {
+    // Check if user exists
+    if !exist_email(&payload.email).await {
+        let error_response = serde_json::json!({
+            "email": "No account found with this email address"
+        });
+        return api_response::failure(
+            Some("Email not found"),
+            Some(error_response),
+            Some(StatusCode::NOT_FOUND),
+        );
+    }
+
+    // Get user data to get their name for personalized email
+    let user_data = match get_user_from_cache_or_db(&payload.email).await {
+        Some(user) => user,
+        None => {
+            let error_response = serde_json::json!({
+                "system": "Unable to process password reset at this time"
+            });
+            return api_response::failure(
+                Some("System error"),
+                Some(error_response),
+                Some(StatusCode::INTERNAL_SERVER_ERROR),
+            );
+        }
+    };
+
+    // Generate OTP
+    let otp = generate_otp();
+
+    // Store OTP in Redis (10 minutes expiration)
+    match store_otp(&payload.email, &otp).await {
+        Ok(_) => {
+            // Send OTP email
+            match send_otp_email(&payload.email, &user_data.name, &otp).await {
+                Ok(_) => {
+                    api_response::success(
+                        Some("OTP sent successfully"),
+                        Some(serde_json::json!({
+                            "message": "Password reset OTP has been sent to your email",
+                            "email": payload.email,
+                            "expires_in_minutes": 10
+                        })),
+                        Some(StatusCode::OK),
+                    )
+                }
+                Err(e) => {
+                    println!("ERROR: Failed to send email: {}", e);
+                    let error_response = serde_json::json!({
+                        "email": "Failed to send reset email. Please try again later."
+                    });
+                    api_response::failure(
+                        Some("Email sending failed"),
+                        Some(error_response),
+                        Some(StatusCode::INTERNAL_SERVER_ERROR),
+                    )
+                }
+            }
+        }
+        Err(e) => {
+            println!("ERROR: Failed to store OTP: {}", e);
+            let error_response = serde_json::json!({
+                "system": "Unable to process password reset request"
+            });
+            api_response::failure(
+                Some("System error"),
+                Some(error_response),
+                Some(StatusCode::INTERNAL_SERVER_ERROR),
+            )
+        }
+    }
+}
+
+// Reset password function - verifies OTP and updates password
+pub async fn reset_password(
+    ValidatedJson(payload): ValidatedJson<ResetPasswordDto>,
+) -> impl IntoResponse {
+    // Check if user exists
+    if !exist_email(&payload.email).await {
+        let error_response = serde_json::json!({
+            "email": "No account found with this email address"
+        });
+        return api_response::failure(
+            Some("Email not found"),
+            Some(error_response),
+            Some(StatusCode::NOT_FOUND),
+        );
+    }
+
+    // Verify and consume OTP
+    match verify_and_consume_otp(&payload.email, &payload.otp).await {
+        Ok(true) => {
+            // OTP is valid, proceed with password update
+            match update_user_password(&payload.email, &payload.new_password).await {
+                Ok(true) => {
+                    // Password updated successfully
+                    // Invalidate all existing tokens for security
+                    if let Err(e) = invalidate_all_user_tokens(&payload.email).await {
+                        println!("WARNING: Failed to invalidate tokens after password reset: {}", e);
+                    }
+
+                    api_response::success(
+                        Some("Password reset successful"),
+                        Some(serde_json::json!({
+                            "message": "Your password has been reset successfully",
+                            "email": payload.email,
+                            "note": "All existing sessions have been invalidated. Please log in with your new password."
+                        })),
+                        Some(StatusCode::OK),
+                    )
+                }
+                Ok(false) => {
+                    let error_response = serde_json::json!({
+                        "system": "User not found during password update"
+                    });
+                    api_response::failure(
+                        Some("Password reset failed"),
+                        Some(error_response),
+                        Some(StatusCode::INTERNAL_SERVER_ERROR),
+                    )
+                }
+                Err(e) => {
+                    println!("ERROR: Failed to update password: {}", e);
+                    let error_response = serde_json::json!({
+                        "system": "Failed to update password. Please try again."
+                    });
+                    api_response::failure(
+                        Some("Password reset failed"),
+                        Some(error_response),
+                        Some(StatusCode::INTERNAL_SERVER_ERROR),
+                    )
+                }
+            }
+        }
+        Ok(false) => {
+            // Invalid or expired OTP
+            let error_response = serde_json::json!({
+                "otp": "Invalid or expired OTP. Please request a new password reset."
+            });
+            api_response::failure(
+                Some("Invalid OTP"),
+                Some(error_response),
+                Some(StatusCode::BAD_REQUEST),
+            )
+        }
+        Err(e) => {
+            println!("ERROR: Failed to verify OTP: {}", e);
+            let error_response = serde_json::json!({
+                "system": "Unable to verify OTP. Please try again."
+            });
+            api_response::failure(
+                Some("System error"),
+                Some(error_response),
+                Some(StatusCode::INTERNAL_SERVER_ERROR),
+            )
+        }
+    }
+}
