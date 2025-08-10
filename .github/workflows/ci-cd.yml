@@ -104,60 +104,14 @@ jobs:
       - name: Run security audit
         run: cargo audit
 
-  # Docker build and push
-  docker:
-    name: Build Docker Image
-    runs-on: ubuntu-latest
-    needs: [test, security]
-    if: github.event_name == 'push'
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=sha,prefix={{branch}}-
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
-
   # Deploy to VPS
   deploy:
     name: Deploy to VPS
     runs-on: ubuntu-latest
-    needs: [docker]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [test, security]
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.0.0
         with:
@@ -172,17 +126,11 @@ jobs:
             # Pull latest changes
             git pull origin master
 
-            # Login to GitHub Container Registry
-            echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-            # Pull latest image
-            docker-compose -f docker-compose.yml -f docker-compose.prod.yml pull
-
             # Stop current services
             docker-compose -f docker-compose.yml -f docker-compose.prod.yml down
 
-            # Start updated services
-            docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+            # Build and start services (this will build the image locally)
+            docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 
             # Clean up unused images
             docker image prune -f

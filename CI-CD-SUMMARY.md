@@ -59,8 +59,8 @@
 
 1. **Developer pushes code** → GitHub
 2. **CI pipeline triggers** → Tests, builds, security audit
-3. **Docker image created** → Multi-platform build with caching
-4. **Automated deployment** → VPS via SSH
+3. **Automated deployment** → VPS via SSH
+4. **Docker build on VPS** → Multi-stage build with caching
 5. **Health verification** → Ensures successful deployment
 6. **Notification** → Success/failure alerts
 
@@ -86,22 +86,23 @@ docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
 ## 🎯 Key Benefits
 
-- **⚡ Fast builds** - Cargo dependency caching
+- **⚡ Fast builds** - Cargo dependency caching, no registry push/pull
 - **🔒 Secure** - Non-root containers, security headers
 - **📈 Scalable** - Horizontal scaling ready
 - **🔄 Reliable** - Health checks and auto-restart
 - **📊 Observable** - Comprehensive logging and monitoring
 - **🚀 Automated** - Zero-downtime deployments
+- **💰 Cost-effective** - No registry costs, builds locally
 
 ## 📋 GitHub Secrets Needed
 
 Configure these in your GitHub repository settings:
 
 ```
-VPS_HOST          # Your VPS IP address
-VPS_USERNAME      # SSH username
-VPS_SSH_KEY       # Private SSH key content
-VPS_PORT          # SSH port (default: 22)
+HOST_IP           # Your VPS IP address
+USERNAME          # SSH username
+PRIVATE_KEY       # Private SSH key content
+PORT              # SSH port (default: 22)
 ```
 
 ## 🎉 Ready for Production!

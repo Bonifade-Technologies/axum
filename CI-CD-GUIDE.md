@@ -93,9 +93,14 @@ RUST_LOG=info
    - Push to GitHub Container Registry
    - Multi-platform builds (AMD64, ARM64)
 
-4. **Deploy to VPS**
-   - Automated deployment to production VPS
-   - Health checks after deployment
+4. **Security Audit**
+
+   - Dependency vulnerability scanning (`cargo audit`)
+
+5. **Deploy to VPS**
+   - Docker image built directly on VPS (no registry needed)
+   - Multi-stage build for lean images
+   - Automated deployment with health checks
    - Rollback capability
 
 ### GitHub Secrets Required
@@ -103,10 +108,10 @@ RUST_LOG=info
 Configure these secrets in your GitHub repository:
 
 ```
-VPS_HOST=your.vps.ip.address
-VPS_USERNAME=your_vps_username
-VPS_SSH_KEY=your_private_ssh_key
-VPS_PORT=22
+HOST_IP           # Your VPS IP address
+USERNAME          # SSH username
+PRIVATE_KEY       # Private SSH key content
+PORT              # SSH port (default: 22)
 ```
 
 ## 🖥️ VPS Setup

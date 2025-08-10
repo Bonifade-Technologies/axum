@@ -1,6 +1,6 @@
 # Multi-stage Dockerfile for lean Rust production builds
 # Stage 1: Build dependencies and cache them
-FROM rust:1.75-slim as chef
+FROM rust:1.88-slim as chef
 WORKDIR /app
 RUN cargo install cargo-chef
 
