@@ -3,6 +3,7 @@ use std::env;
 
 pub mod database;
 pub mod redis;
+pub mod email;
 
 // JWT constants with fallback
 pub const JWT_SECRET: Lazy<String> = Lazy::new(|| {

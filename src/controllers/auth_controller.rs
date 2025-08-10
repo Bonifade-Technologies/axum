@@ -1,12 +1,14 @@
 use crate::config::redis::redis_client;
+use crate::config::email::send_otp_email;
 use crate::database::users as user;
-use crate::dtos::auth_dto::{LoginDto, SignupDto};
+use crate::dtos::auth_dto::{LoginDto, SignupDto, ForgotPasswordDto, ResetPasswordDto};
 use crate::extractors::json_extractor::ValidatedJson;
 use crate::resources::user_resource::UserResource;
 use crate::utils::api_response;
 use crate::utils::auth::{
     authenticate_user, cache_complete_user_data, exist_email, generate_jwt_token, hash_password,
-    invalidate_all_user_tokens, unique_email, verify_password, CachedUser,
+    invalidate_all_user_tokens, unique_email, verify_password, CachedUser, generate_otp, 
+    store_otp, verify_and_consume_otp, update_user_password, get_user_from_cache_or_db,
 };
 
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Extension};

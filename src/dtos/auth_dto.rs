@@ -58,6 +58,50 @@ impl Default for LoginDto {
     }
 }
 
+#[derive(Debug, Deserialize, Serialize, Validate)]
+#[serde(default)]
+pub struct ForgotPasswordDto {
+    #[validate(email(message = "invalid email"))]
+    #[validate(length(min = 1, message = "email is required"))]
+    pub email: String,
+}
+
+impl Default for ForgotPasswordDto {
+    fn default() -> Self {
+        Self {
+            email: String::new(),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Validate)]
+#[serde(default)]
+pub struct ResetPasswordDto {
+    #[validate(email(message = "invalid email"))]
+    #[validate(length(min = 1, message = "email is required"))]
+    pub email: String,
+
+    #[validate(length(min = 6, max = 6, message = "OTP must be exactly 6 digits"))]
+    pub otp: String,
+
+    #[validate(length(min = 6, message = "password must be at least 6 characters"))]
+    pub new_password: String,
+
+    #[validate(must_match(other = "new_password", message = "passwords must match"))]
+    pub confirm_password: String,
+}
+
+impl Default for ResetPasswordDto {
+    fn default() -> Self {
+        Self {
+            email: String::new(),
+            otp: String::new(),
+            new_password: String::new(),
+            confirm_password: String::new(),
+        }
+    }
+}
+
 pub fn validation_errors_to_map(errors: &ValidationErrors) -> HashMap<String, String> {
     let mut map = HashMap::new();
     for (field, errs) in errors.field_errors().iter() {
