@@ -3,3 +3,4 @@ pub mod auth;
 pub mod cache;
 pub mod form_extractor;
 pub mod query_params;
+pub mod smart_cache;

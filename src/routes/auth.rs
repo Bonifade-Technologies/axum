@@ -1,4 +1,4 @@
-use crate::controllers::auth::{login, profile, register};
+use crate::controllers::auth_controller::{login, profile, register};
 use crate::middlewares::auth_middleware::auth_middleware;
 use axum::{
     middleware,
