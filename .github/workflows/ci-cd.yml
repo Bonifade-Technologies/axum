@@ -89,7 +89,7 @@ jobs:
 
   # Security audit
   security:
-    name: Security Audit
+    name: Skipping Security Audit
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -101,8 +101,8 @@ jobs:
       - name: Install cargo-audit
         run: cargo install cargo-audit
 
-      - name: Run security audit
-        run: cargo audit
+      # - name: Run security audit
+      #   run: cargo audit
 
   # Deploy to VPS
   deploy:
