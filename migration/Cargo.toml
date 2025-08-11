@@ -17,5 +17,4 @@ default-features = false
 features = [
   "runtime-tokio-rustls",  # `ASYNC_RUNTIME` feature
   "sqlx-postgres",         # `DATABASE_DRIVER` feature - only PostgreSQL
-  # NOTE: Avoid "cli" feature which pulls in sea-schema with all DB drivers
 ]
