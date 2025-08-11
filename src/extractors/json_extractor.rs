@@ -29,10 +29,10 @@ where
                 Err(rejection) => {
                     let error_message = match rejection {
                         JsonRejection::JsonDataError(_err) => {
-                            format!("Kindly pass a valid JSON data: {}", _err)
+                            format!("Kindly pass a valid JSON data: {}", _err).to_string()
                         }
                         JsonRejection::JsonSyntaxError(_err) => {
-                            format!("Kindly pass a valid JSON body")
+                            format!("Kindly pass a valid JSON body").to_string()
                         }
                         JsonRejection::MissingJsonContentType(_) => {
                             "Content-Type must be application/json".to_string()
