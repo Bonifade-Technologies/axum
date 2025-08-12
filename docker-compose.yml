@@ -27,11 +27,6 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
-      # NOTE: Renamed volume to postgres_data_v15 to make room for a future upgrade (e.g., postgres_data_v17)
-      # The old volume (postgres_data) will remain on your system; data is NOT migrated automatically.
-      # To keep existing data, either:
-      #  1. Revert this name change, OR
-      #  2. Manually copy data / perform pg_dump + restore into the new volume.
       - postgres_data_v15:/var/lib/postgresql/data
     # Map to 5433 by default to avoid clashing with a host Postgres on 5432
     ports:
