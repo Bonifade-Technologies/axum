@@ -23,9 +23,17 @@ pub async fn register(
     State(db): State<DatabaseConnection>,
     ValidatedJson(payload): ValidatedJson<SignupDto>,
 ) -> impl IntoResponse {
+    let start_time = std::time::Instant::now();
     let now = Utc::now();
 
+    println!("🚀 Registration started for: {}", payload.email);
+
+    let unique_check_start = std::time::Instant::now();
     let unique = unique_email_with_db(&payload.email, &db).await;
+    println!(
+        "⏱️ Email uniqueness check took: {:?}",
+        unique_check_start.elapsed()
+    );
 
     if !unique {
         let error_response = serde_json::json!({
@@ -39,7 +47,9 @@ pub async fn register(
     }
 
     // Hash the password
+    let hash_start = std::time::Instant::now();
     let hashed_password = hash_password(&payload.password);
+    println!("⏱️ Password hashing took: {:?}", hash_start.elapsed());
 
     let user = user::ActiveModel {
         id: Set(cuid2::create_id()),
@@ -52,7 +62,9 @@ pub async fn register(
         deleted_at: Set(None),
     };
 
+    let db_insert_start = std::time::Instant::now();
     let res = user.insert(&db).await;
+    println!("⏱️ Database insert took: {:?}", db_insert_start.elapsed());
 
     match res {
         Ok(user) => {
@@ -86,7 +98,7 @@ pub async fn register(
                 // Batch Redis operations for better performance
                 let token_key = format!("token:{token}");
                 let activity_key = format!("activity:{}", user.email);
-                
+
                 // Use pipeline for multiple Redis operations
                 let _: Result<(), redis::RedisError> = redis::pipe()
                     .atomic()
@@ -101,6 +113,12 @@ pub async fn register(
                     "token": token
                 });
 
+                println!(
+                    "✅ Registration completed for {} in {:?}",
+                    payload.email,
+                    start_time.elapsed()
+                );
+
                 api_response::success(
                     Some("User registered successfully"),
                     Some(response),
@@ -112,6 +130,12 @@ pub async fn register(
                     "user": UserResource::from(&user),
                     "token": token
                 });
+
+                println!(
+                    "✅ Registration completed for {} in {:?} (Redis unavailable)",
+                    payload.email,
+                    start_time.elapsed()
+                );
 
                 api_response::success(
                     Some("User registered successfully"),
