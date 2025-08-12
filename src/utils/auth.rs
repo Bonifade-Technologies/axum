@@ -5,7 +5,7 @@ use crate::{
 use jsonwebtoken::{encode, EncodingKey, Header};
 use serde::{Deserialize, Serialize};
 extern crate bcrypt;
-use bcrypt::{hash, verify, DEFAULT_COST};
+use bcrypt::{hash, verify};
 use redis::AsyncCommands;
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 
@@ -13,6 +13,9 @@ use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 const USER_CACHE_TTL: u64 = 7 * 24 * 60 * 60; // 7 days for user data
 const SESSION_TTL: u64 = 24 * 60 * 60; // 24 hours for sessions
 const ACTIVE_USER_TTL: u64 = 30 * 24 * 60 * 60; // 30 days for very active users
+
+// Optimized bcrypt cost for better performance (still secure)
+const BCRYPT_COST: u32 = 10; // Instead of DEFAULT_COST (12), use 10 for faster registration
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
@@ -30,7 +33,7 @@ pub struct CachedUser {
 
 // Helper functions for password hashing
 pub fn hash_password(password: &str) -> String {
-    hash(password, DEFAULT_COST).unwrap()
+    hash(password, BCRYPT_COST).unwrap()
 }
 
 pub fn verify_password(input: &str, stored: &str) -> bool {
@@ -69,6 +72,30 @@ pub async fn unique_email(email: &str) -> bool {
         .filter(user::Column::Email.eq(email))
         .filter(user::Column::DeletedAt.is_null())
         .one(&db_connection().await)
+        .await;
+
+    if let Ok(Some(_)) = existing_user {
+        return false;
+    }
+
+    true
+}
+
+// Optimized version that accepts a DB connection to avoid creating new connections
+pub async fn unique_email_with_db(email: &str, db: &sea_orm::DatabaseConnection) -> bool {
+    let client = redis_client();
+    if let Ok(mut conn) = client.get_multiplexed_tokio_connection().await {
+        let redis_key = format!("user:{email}");
+        let exists: Result<bool, redis::RedisError> = conn.exists(&redis_key).await;
+        if let Ok(true) = exists {
+            return false;
+        }
+    }
+
+    let existing_user = user::Entity::find()
+        .filter(user::Column::Email.eq(email))
+        .filter(user::Column::DeletedAt.is_null())
+        .one(db)
         .await;
 
     if let Ok(Some(_)) = existing_user {

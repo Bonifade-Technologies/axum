@@ -9,8 +9,8 @@ use crate::utils::auth::{
     authenticate_user, cache_complete_user_data, can_request_forgot_password, exist_email,
     generate_jwt_token, generate_otp, get_forgot_password_rate_limit_remaining,
     get_user_from_cache_or_db, hash_password, invalidate_all_user_tokens,
-    set_forgot_password_rate_limit, store_otp, unique_email, update_user_password,
-    verify_and_consume_otp, verify_password, CachedUser,
+    set_forgot_password_rate_limit, store_otp, unique_email_with_db, update_user_password,
+    verify_and_consume_otp, CachedUser,
 };
 use crate::utils::job_queue::queue_password_reset_success_email;
 
@@ -25,7 +25,7 @@ pub async fn register(
 ) -> impl IntoResponse {
     let now = Utc::now();
 
-    let unique = unique_email(&payload.email).await;
+    let unique = unique_email_with_db(&payload.email, &db).await;
 
     if !unique {
         let error_response = serde_json::json!({
@@ -56,19 +56,7 @@ pub async fn register(
 
     match res {
         Ok(user) => {
-            // Verify the password hash before generating token
-            if !verify_password(&payload.password, &user.password) {
-                let error_response = serde_json::json!({
-                    "password": "Password verification failed after hashing"
-                });
-                return api_response::failure(
-                    Some("Registration failed"),
-                    Some(error_response),
-                    Some(StatusCode::INTERNAL_SERVER_ERROR),
-                );
-            }
-
-            // Generate JWT token
+            // Generate JWT token (removed unnecessary password verification)
             let token = match generate_jwt_token(&user.email) {
                 Ok(t) => t,
                 Err(_) => {
@@ -95,14 +83,16 @@ pub async fn register(
                 };
                 cache_complete_user_data(&user.email, &cached_user).await;
 
-                // Store JWT token in Redis
-                let _: Result<(), redis::RedisError> = conn
-                    .set_ex(format!("token:{token}"), user.email.clone(), 24 * 60 * 60)
-                    .await;
-
-                // Initialize activity counter
-                let _: Result<(), redis::RedisError> = conn
-                    .set_ex(format!("activity:{}", user.email), 1, 30 * 24 * 60 * 60)
+                // Batch Redis operations for better performance
+                let token_key = format!("token:{token}");
+                let activity_key = format!("activity:{}", user.email);
+                
+                // Use pipeline for multiple Redis operations
+                let _: Result<(), redis::RedisError> = redis::pipe()
+                    .atomic()
+                    .set_ex(&token_key, &user.email, 24 * 60 * 60)
+                    .set_ex(&activity_key, 1, 30 * 24 * 60 * 60)
+                    .query_async(&mut conn)
                     .await;
 
                 // Return user with token
