@@ -28,7 +28,7 @@ pub async fn create_user(
     State(db): State<DatabaseConnection>,
     ValidatedJson(payload): ValidatedJson<SignupDto>,
 ) -> impl IntoResponse {
-    let now = chrono::Utc::now();
+    let now = chrono::Utc::now().naive_utc();
     let user = user::ActiveModel {
         id: Set(cuid2::create_id()),
         name: Set(payload.name),
@@ -283,7 +283,7 @@ pub async fn update_user(
             if let Some(password) = payload.password {
                 active.password = Set(password);
             }
-            active.updated_at = Set(chrono::Utc::now());
+            active.updated_at = Set(chrono::Utc::now().naive_utc());
             let update_res = active.update(&db).await;
 
             match update_res {
@@ -325,7 +325,7 @@ pub async fn delete_user(
     match res {
         Ok(Some(user)) => {
             let mut active: user::ActiveModel = user.into();
-            active.deleted_at = Set(Some(chrono::Utc::now()));
+            active.deleted_at = Set(Some(chrono::Utc::now().naive_utc()));
             let delete_res = active.update(&db).await;
 
             match delete_res {
@@ -408,7 +408,7 @@ pub async fn restore_user(
         Ok(Some(user)) => {
             let mut active: user::ActiveModel = user.into();
             active.deleted_at = Set(None);
-            active.updated_at = Set(chrono::Utc::now());
+            active.updated_at = Set(chrono::Utc::now().naive_utc());
             let restore_res = active.update(&db).await;
 
             match restore_res {

@@ -1713,6 +1713,7 @@ dependencies = [
  "async-std",
  "dotenvy",
  "sea-orm-migration",
+ "tokio",
 ]
 
 [[package]]

@@ -23,7 +23,7 @@ pub async fn register(
     State(db): State<DatabaseConnection>,
     ValidatedJson(payload): ValidatedJson<SignupDto>,
 ) -> impl IntoResponse {
-    let now = Utc::now();
+    let now = Utc::now().naive_utc();
 
     let unique = unique_email(&payload.email).await;
 

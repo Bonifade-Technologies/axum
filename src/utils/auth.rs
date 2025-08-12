@@ -336,7 +336,7 @@ pub async fn update_user_password(
         // Update password
         let mut user_active: user::ActiveModel = user_model.into();
         user_active.password = Set(hashed_password.clone());
-        user_active.updated_at = Set(chrono::Utc::now());
+        user_active.updated_at = Set(chrono::Utc::now().naive_utc());
 
         let updated_user = user_active.update(&db).await?;
 
