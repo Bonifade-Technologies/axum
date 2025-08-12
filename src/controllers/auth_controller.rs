@@ -345,7 +345,7 @@ pub async fn forgot_password(
             match send_otp_email(&payload.email, &user_data.name, &otp).await {
                 Ok(_) => {
                     // Set rate limit after successful email send
-                    if let Err(_) = set_forgot_password_rate_limit(&payload.email).await {
+                    if (set_forgot_password_rate_limit(&payload.email).await).is_err() {
                         // Continue anyway - email was sent successfully
                     }
 
@@ -423,7 +423,7 @@ pub async fn reset_password(
             // OTP is valid, proceed with password update
             match update_user_password(&payload.email, &payload.new_password).await {
                 Ok(true) => {
-                    if let Err(_) = invalidate_all_user_tokens(&payload.email).await {
+                    if (invalidate_all_user_tokens(&payload.email).await).is_err() {
                         // Log warning but continue
                     }
 
@@ -434,9 +434,7 @@ pub async fn reset_password(
                     let email = payload.email.clone();
                     let name = user_data.name.clone();
                     tokio::spawn(async move {
-                        if let Err(_) =
-                            queue_password_reset_success_email(&email, &name, &reset_time).await
-                        {
+                        if (queue_password_reset_success_email(&email, &name, &reset_time).await).is_err() {
                             // Email queue failed, but password reset was successful
                         }
                     });

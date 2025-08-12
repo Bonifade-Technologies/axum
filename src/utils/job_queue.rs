@@ -72,7 +72,7 @@ pub fn queue_password_reset_success_email_nonblocking(
     reset_time: String,
 ) {
     tokio::spawn(async move {
-        if let Err(_) = queue_password_reset_success_email(&email, &name, &reset_time).await {
+        if (queue_password_reset_success_email(&email, &name, &reset_time).await).is_err() {
             // Failed to queue email
         }
     });
@@ -88,10 +88,7 @@ where
 {
     let _job_name = job_name.to_string();
     tokio::spawn(async move {
-        match future().await {
-            Ok(_) => {}
-            Err(_) => {}
-        }
+        if (future().await).is_ok() {}
     });
 }
 
