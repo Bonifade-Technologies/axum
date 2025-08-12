@@ -12,6 +12,7 @@ use crate::utils::auth::{
     set_forgot_password_rate_limit, store_otp, unique_email_with_db, update_user_password,
     verify_and_consume_otp, CachedUser,
 };
+use crate::utils::cache::invalidate_cache_by_prefix;
 use crate::utils::job_queue::queue_password_reset_success_email;
 
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Extension};
@@ -118,7 +119,7 @@ pub async fn register(
                     payload.email,
                     start_time.elapsed()
                 );
-
+                let _ = invalidate_cache_by_prefix("user").await;
                 api_response::success(
                     Some("User registered successfully"),
                     Some(response),
