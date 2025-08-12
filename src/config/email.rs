@@ -34,7 +34,10 @@ pub fn create_smtp_transport(
 
     let credentials = Credentials::new(SMTP_USERNAME.clone(), SMTP_PASSWORD.clone());
 
-    println!("🔧 DEBUG: Creating SMTP transport for {}:{}", *SMTP_HOST, *SMTP_PORT);
+    println!(
+        "🔧 DEBUG: Creating SMTP transport for {}:{}",
+        *SMTP_HOST, *SMTP_PORT
+    );
     println!("🔧 DEBUG: Username: {}", *SMTP_USERNAME);
 
     // Create TLS parameters that accept self-signed certificates
@@ -85,8 +88,8 @@ pub async fn send_email(
 
     // Use plain text content type to avoid InvalidContentType error
     let email = Message::builder()
-    .from(format!("{} <{}>", *FROM_NAME, *FROM_EMAIL).parse()?)
-    .to(format!("{to_name} <{to_email}>").parse()?)
+        .from(format!("{} <{}>", *FROM_NAME, *FROM_EMAIL).parse()?)
+        .to(format!("{to_name} <{to_email}>").parse()?)
         .subject(subject)
         .header(ContentType::TEXT_PLAIN)
         .body(body.to_string())?;

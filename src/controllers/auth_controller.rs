@@ -196,7 +196,11 @@ pub async fn login(
         let client = redis_client();
         if let Ok(mut conn) = client.get_multiplexed_tokio_connection().await {
             let _: Result<(), redis::RedisError> = conn
-                .set_ex(format!("token:{token}"), payload.email.clone(), 24 * 60 * 60)
+                .set_ex(
+                    format!("token:{token}"),
+                    payload.email.clone(),
+                    24 * 60 * 60,
+                )
                 .await;
         }
 
