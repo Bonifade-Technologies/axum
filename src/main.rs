@@ -1,4 +1,5 @@
 use axum_template::{config, run};
+use migration::{Migrator, MigratorTrait};
 use dotenvy::dotenv;
 use sea_orm::{Database, DatabaseConnection};
 use std::time::Duration;
@@ -42,6 +43,14 @@ async fn main() {
     let db = db_opt.unwrap_or_else(|| {
         panic!("Failed to connect to database after {max_attempts} attempts. Check networking, sslmode, host, and credentials.")
     });
+
+    // Run database migrations automatically
+    println!("🛠  Running database migrations...");
+    if let Err(e) = Migrator::up(&db, None).await {
+        eprintln!("❌ Migration failed: {e}");
+        std::process::exit(1);
+    }
+    println!("✅ Migrations are up to date");
 
     // Initialize the Apalis job queue
     if let Err(e) = axum_template::utils::job_queue::init_job_queue().await {
