@@ -87,9 +87,7 @@ where
         + 'static,
 {
     let _job_name = job_name.to_string();
-    tokio::spawn(async move {
-        if (future().await).is_ok() {}
-    });
+    tokio::spawn(async move { if (future().await).is_ok() {} });
 }
 
 // Start the Apalis worker with Redis backend

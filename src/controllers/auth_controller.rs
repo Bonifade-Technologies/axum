@@ -434,7 +434,9 @@ pub async fn reset_password(
                     let email = payload.email.clone();
                     let name = user_data.name.clone();
                     tokio::spawn(async move {
-                        if (queue_password_reset_success_email(&email, &name, &reset_time).await).is_err() {
+                        if (queue_password_reset_success_email(&email, &name, &reset_time).await)
+                            .is_err()
+                        {
                             // Email queue failed, but password reset was successful
                         }
                     });
