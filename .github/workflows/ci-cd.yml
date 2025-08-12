@@ -25,6 +25,19 @@ jobs:
           --health-retries 5
         ports:
           - 6379:6379
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd "pg_isready -U test_user -d test_db"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
 
     steps:
       - name: Checkout code
@@ -43,7 +56,23 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y pkg-config libssl-dev
+          sudo apt-get install -y pkg-config libssl-dev postgresql-client
+
+      - name: Wait for PostgreSQL
+        env:
+          PGPASSWORD: test_password
+        run: |
+          for i in {1..30}; do
+            psql -h localhost -U test_user -d test_db -c 'SELECT 1;' >/dev/null 2>&1 && echo "PostgreSQL is ready" && break
+            echo "Waiting for PostgreSQL... ($i)"
+            sleep 2
+          done
+          psql -h localhost -U test_user -d test_db -c 'SELECT version();'
+
+      - name: Run database migrations
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db?sslmode=disable
+        run: cargo run -p migration
 
       - name: Check formatting
         run: cargo fmt -- --check
@@ -53,7 +82,7 @@ jobs:
 
       - name: Run tests
         env:
-          DATABASE_URL: postgresql://test_user:test_password@localhost/test_db
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db?sslmode=disable
           REDIS_URL: redis://localhost:6379
           JWT_SECRET: test_jwt_secret_key_for_testing_purposes_only
           SMTP_HOST: smtp.gmail.com
@@ -63,6 +92,15 @@ jobs:
           FROM_EMAIL: test@example.com
           FROM_NAME: Test System
         run: cargo test --verbose
+
+      - name: PostgreSQL post-job cleanup
+        if: always()
+        env:
+          PGPASSWORD: test_password
+        run: |
+          echo "Terminating connections and dropping test database..."
+          psql -h localhost -U test_user -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='test_db' AND pid <> pg_backend_pid();" || true
+          psql -h localhost -U test_user -d postgres -c "DROP DATABASE IF EXISTS test_db;" || true
 
       - name: Build release
         run: cargo build --release
