@@ -24,17 +24,9 @@ pub async fn register(
     State(db): State<DatabaseConnection>,
     ValidatedJson(payload): ValidatedJson<SignupDto>,
 ) -> impl IntoResponse {
-    let start_time = std::time::Instant::now();
     let now = Utc::now();
 
-    println!("🚀 Registration started for: {}", payload.email);
-
-    let unique_check_start = std::time::Instant::now();
     let unique = unique_email_with_db(&payload.email, &db).await;
-    println!(
-        "⏱️ Email uniqueness check took: {:?}",
-        unique_check_start.elapsed()
-    );
 
     if !unique {
         let error_response = serde_json::json!({
@@ -48,9 +40,7 @@ pub async fn register(
     }
 
     // Hash the password
-    let hash_start = std::time::Instant::now();
     let hashed_password = hash_password(&payload.password);
-    println!("⏱️ Password hashing took: {:?}", hash_start.elapsed());
 
     let user = user::ActiveModel {
         id: Set(cuid2::create_id()),
@@ -63,9 +53,7 @@ pub async fn register(
         deleted_at: Set(None),
     };
 
-    let db_insert_start = std::time::Instant::now();
     let res = user.insert(&db).await;
-    println!("⏱️ Database insert took: {:?}", db_insert_start.elapsed());
 
     match res {
         Ok(user) => {
@@ -114,11 +102,6 @@ pub async fn register(
                     "token": token
                 });
 
-                println!(
-                    "✅ Registration completed for {} in {:?}",
-                    payload.email,
-                    start_time.elapsed()
-                );
                 let _ = invalidate_cache_by_prefix("user").await;
                 api_response::success(
                     Some("User registered successfully"),
@@ -131,12 +114,6 @@ pub async fn register(
                     "user": UserResource::from(&user),
                     "token": token
                 });
-
-                println!(
-                    "✅ Registration completed for {} in {:?} (Redis unavailable)",
-                    payload.email,
-                    start_time.elapsed()
-                );
 
                 api_response::success(
                     Some("User registered successfully"),
@@ -178,16 +155,10 @@ pub async fn login(
         // SECURITY: Invalidate all existing tokens for this user before creating a new one
         // This ensures only one active session per user (you can modify this behavior)
         match invalidate_all_user_tokens(&payload.email).await {
-            Ok(count) => {
-                if count > 0 {
-                    println!(
-                        "DEBUG: Invalidated {} existing tokens for {}",
-                        count, payload.email
-                    );
-                }
+            Ok(_) => {
+                // Tokens invalidated successfully
             }
-            Err(e) => {
-                println!("DEBUG: Failed to invalidate old tokens: {e}");
+            Err(_) => {
                 // We continue anyway - this shouldn't block login
             }
         }
@@ -332,8 +303,7 @@ pub async fn forgot_password(
                 );
             }
         }
-        Err(e) => {
-            println!("ERROR: Rate limit check failed: {e}");
+        Err(_) => {
             // Continue anyway - don't block user due to Redis issues
         }
     }
@@ -375,8 +345,7 @@ pub async fn forgot_password(
             match send_otp_email(&payload.email, &user_data.name, &otp).await {
                 Ok(_) => {
                     // Set rate limit after successful email send
-                    if let Err(e) = set_forgot_password_rate_limit(&payload.email).await {
-                        println!("WARNING: Failed to set rate limit: {e}");
+                    if let Err(_) = set_forgot_password_rate_limit(&payload.email).await {
                         // Continue anyway - email was sent successfully
                     }
 
@@ -393,8 +362,7 @@ pub async fn forgot_password(
                         Some(StatusCode::OK),
                     )
                 }
-                Err(e) => {
-                    println!("ERROR: Failed to send email: {e}");
+                Err(_) => {
                     let error_response = serde_json::json!({
                         "email": "Failed to send reset email. Please try again later."
                     });
@@ -406,8 +374,7 @@ pub async fn forgot_password(
                 }
             }
         }
-        Err(e) => {
-            println!("ERROR: Failed to store OTP: {e}");
+        Err(_) => {
             let error_response = serde_json::json!({
                 "system": "Unable to process password reset request"
             });
@@ -456,8 +423,8 @@ pub async fn reset_password(
             // OTP is valid, proceed with password update
             match update_user_password(&payload.email, &payload.new_password).await {
                 Ok(true) => {
-                    if let Err(e) = invalidate_all_user_tokens(&payload.email).await {
-                        println!("WARNING: Failed to invalidate tokens after password reset: {e}");
+                    if let Err(_) = invalidate_all_user_tokens(&payload.email).await {
+                        // Log warning but continue
                     }
 
                     // Queue success email in background (truly async - don't await)
@@ -467,12 +434,10 @@ pub async fn reset_password(
                     let email = payload.email.clone();
                     let name = user_data.name.clone();
                     tokio::spawn(async move {
-                        if let Err(e) =
+                        if let Err(_) =
                             queue_password_reset_success_email(&email, &name, &reset_time).await
                         {
-                            println!("WARNING: Failed to queue password reset success email: {e}");
-                        } else {
-                            println!("✅ Password reset success email queued for: {email}");
+                            // Email queue failed, but password reset was successful
                         }
                     });
 
@@ -497,8 +462,7 @@ pub async fn reset_password(
                         Some(StatusCode::INTERNAL_SERVER_ERROR),
                     )
                 }
-                Err(e) => {
-                    println!("ERROR: Failed to update password: {e}");
+                Err(_) => {
                     let error_response = serde_json::json!({
                         "system": "Failed to update password. Please try again."
                     });
@@ -521,8 +485,7 @@ pub async fn reset_password(
                 Some(StatusCode::UNPROCESSABLE_ENTITY),
             )
         }
-        Err(e) => {
-            println!("ERROR: Failed to verify OTP: {e}");
+        Err(_) => {
             let error_response = serde_json::json!({
                 "system": "Unable to verify OTP. Please try again."
             });

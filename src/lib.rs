@@ -23,8 +23,6 @@ pub async fn run(db: DatabaseConnection) {
         *crate::config::database::APP_PORT
     );
 
-    println!("Starting server at {addr}");
-
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }

@@ -1,13 +1,12 @@
 use crate::{
-    config::database::db_connection, config::redis::redis_client, database::users as user,
-    resources::user_resource::UserResource,
+    config::redis::redis_client, database::users as user, resources::user_resource::UserResource,
 };
 use jsonwebtoken::{encode, EncodingKey, Header};
 use serde::{Deserialize, Serialize};
 extern crate bcrypt;
 use bcrypt::{hash, verify};
 use redis::AsyncCommands;
-use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+use sea_orm::{ColumnTrait, Database, EntityTrait, QueryFilter};
 
 // Cache TTL constants
 const USER_CACHE_TTL: u64 = 7 * 24 * 60 * 60; // 7 days for user data
@@ -68,14 +67,16 @@ pub async fn unique_email(email: &str) -> bool {
         }
     }
 
-    let existing_user = user::Entity::find()
-        .filter(user::Column::Email.eq(email))
-        .filter(user::Column::DeletedAt.is_null())
-        .one(&db_connection().await)
-        .await;
+    if let Ok(db) = Database::connect(&*crate::config::database::DB_URL).await {
+        let existing_user = user::Entity::find()
+            .filter(user::Column::Email.eq(email))
+            .filter(user::Column::DeletedAt.is_null())
+            .one(&db)
+            .await;
 
-    if let Ok(Some(_)) = existing_user {
-        return false;
+        if let Ok(Some(_)) = existing_user {
+            return false;
+        }
     }
 
     true
@@ -115,14 +116,16 @@ pub async fn exist_email(email: &str) -> bool {
         }
     }
 
-    let existing_user = user::Entity::find()
-        .filter(user::Column::Email.eq(email))
-        .filter(user::Column::DeletedAt.is_null())
-        .one(&db_connection().await)
-        .await;
+    if let Ok(db) = Database::connect(&*crate::config::database::DB_URL).await {
+        let existing_user = user::Entity::find()
+            .filter(user::Column::Email.eq(email))
+            .filter(user::Column::DeletedAt.is_null())
+            .one(&db)
+            .await;
 
-    if let Ok(Some(_)) = existing_user {
-        return true;
+        if let Ok(Some(_)) = existing_user {
+            return true;
+        }
     }
 
     false
@@ -154,32 +157,31 @@ pub async fn get_complete_user_from_cache_or_db(email: &str) -> Option<CachedUse
 
             // Parse and return cached user with password
             if let Ok(cached_user) = serde_json::from_str::<CachedUser>(&user_json) {
-                println!("✅ Cache HIT for user: {email}");
                 return Some(cached_user);
             }
         }
     }
 
-    println!("💾 Cache MISS for user: {email} - fetching from database");
-
     // Not in cache or cache failed - fetch from database
-    let db_user = user::Entity::find()
-        .filter(user::Column::Email.eq(email))
-        .filter(user::Column::DeletedAt.is_null())
-        .one(&db_connection().await)
-        .await;
+    if let Ok(db) = Database::connect(&*crate::config::database::DB_URL).await {
+        let db_user = user::Entity::find()
+            .filter(user::Column::Email.eq(email))
+            .filter(user::Column::DeletedAt.is_null())
+            .one(&db)
+            .await;
 
-    if let Ok(Some(user_model)) = db_user {
-        let user_resource = UserResource::from(&user_model);
-        let cached_user = CachedUser {
-            user_resource: user_resource.clone(),
-            password_hash: user_model.password.clone(),
-        };
+        if let Ok(Some(user_model)) = db_user {
+            let user_resource = UserResource::from(&user_model);
+            let cached_user = CachedUser {
+                user_resource: user_resource.clone(),
+                password_hash: user_model.password.clone(),
+            };
 
-        // Store complete user data in cache for future requests
-        cache_complete_user_data(email, &cached_user).await;
+            // Store complete user data in cache for future requests
+            cache_complete_user_data(email, &cached_user).await;
 
-        return Some(cached_user);
+            return Some(cached_user);
+        }
     }
 
     None
@@ -195,8 +197,6 @@ pub async fn cache_complete_user_data(email: &str, cached_user: &CachedUser) {
             // Store with smart TTL based on user activity
             let ttl = get_smart_ttl_for_user(email).await;
             let _: Result<(), redis::RedisError> = conn.set_ex(&redis_key, user_json, ttl).await;
-
-            println!("💾 Cached complete user data for: {email} with TTL: {ttl} seconds");
         }
     }
 }
@@ -223,10 +223,7 @@ pub async fn authenticate_user(email: &str, password: &str) -> Option<UserResour
             // Increment activity for smart TTL
             increment_user_activity(email).await;
 
-            println!("🔐 Password verified from cache for user: {email}");
             return Some(cached_user.user_resource);
-        } else {
-            println!("❌ Invalid password for user: {email}");
         }
     }
     None
@@ -345,36 +342,38 @@ pub async fn update_user_password(
     let hashed_password = hash_password(new_password);
 
     // Update in database
-    let db = db_connection().await;
+    if let Ok(db) = Database::connect(&*crate::config::database::DB_URL).await {
+        use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
-    use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
+        // Find the user
+        let user_result = user::Entity::find()
+            .filter(user::Column::Email.eq(email))
+            .filter(user::Column::DeletedAt.is_null())
+            .one(&db)
+            .await?;
 
-    // Find the user
-    let user_result = user::Entity::find()
-        .filter(user::Column::Email.eq(email))
-        .filter(user::Column::DeletedAt.is_null())
-        .one(&db)
-        .await?;
+        if let Some(user_model) = user_result {
+            // Update password
+            let mut user_active: user::ActiveModel = user_model.into();
+            user_active.password = Set(hashed_password.clone());
+            user_active.updated_at = Set(chrono::Utc::now());
 
-    if let Some(user_model) = user_result {
-        // Update password
-        let mut user_active: user::ActiveModel = user_model.into();
-        user_active.password = Set(hashed_password.clone());
-        user_active.updated_at = Set(chrono::Utc::now());
+            let updated_user = user_active.update(&db).await?;
 
-        let updated_user = user_active.update(&db).await?;
+            // Update cache with new password hash
+            if let Some(cached_user) = get_complete_user_from_cache_or_db(email).await {
+                let mut updated_cached_user = cached_user;
+                updated_cached_user.password_hash = hashed_password;
+                updated_cached_user.user_resource.updated_at = updated_user.updated_at.to_string();
 
-        // Update cache with new password hash
-        if let Some(cached_user) = get_complete_user_from_cache_or_db(email).await {
-            let mut updated_cached_user = cached_user;
-            updated_cached_user.password_hash = hashed_password;
-            updated_cached_user.user_resource.updated_at = updated_user.updated_at.to_string();
+                // Re-cache the updated user data
+                cache_complete_user_data(email, &updated_cached_user).await;
+            }
 
-            // Re-cache the updated user data
-            cache_complete_user_data(email, &updated_cached_user).await;
+            Ok(true)
+        } else {
+            Ok(false)
         }
-
-        Ok(true)
     } else {
         Ok(false)
     }
@@ -395,8 +394,7 @@ pub async fn can_request_forgot_password(email: &str) -> Result<bool, redis::Red
 
     if exists {
         // Get remaining TTL
-        let ttl: i64 = conn.ttl(&rate_limit_key).await.unwrap_or(0);
-        println!("🚫 Rate limit active for {email}: {ttl} seconds remaining");
+        let _ttl: i64 = conn.ttl(&rate_limit_key).await.unwrap_or(0);
         Ok(false)
     } else {
         Ok(true)

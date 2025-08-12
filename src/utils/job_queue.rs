@@ -18,27 +18,10 @@ async fn process_password_reset_success_email(
     job: PasswordResetSuccessEmailJob,
     _data: Data<()>,
 ) -> Result<(), Error> {
-    println!(
-        "🔄 [Apalis Worker] Processing password reset success email job for: {}",
-        job.email
-    );
-
     // Send the HTML email
     match send_password_reset_success_email(&job.email, &job.name, &job.reset_time).await {
-        Ok(_) => {
-            println!(
-                "✅ [Apalis Worker] Password reset success email sent to: {}",
-                job.email
-            );
-            Ok(())
-        }
-        Err(e) => {
-            println!(
-                "❌ [Apalis Worker] Failed to send password reset success email to {}: {}",
-                job.email, e
-            );
-            Err(Error::Failed(std::sync::Arc::new(e)))
-        }
+        Ok(_) => Ok(()),
+        Err(e) => Err(Error::Failed(std::sync::Arc::new(e))),
     }
 }
 
@@ -54,12 +37,9 @@ async fn create_redis_storage(
 pub async fn init_job_queue() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
 
-    println!("🔧 [Apalis] Testing connection to Redis at: {redis_url}");
-
     // Test the connection
     let _conn = apalis_redis::connect(redis_url).await?;
 
-    println!("✅ [Apalis] Redis connection test successful");
     Ok(())
 }
 
@@ -69,8 +49,6 @@ pub async fn queue_password_reset_success_email(
     name: &str,
     reset_time: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    println!("📤 [Apalis] Queuing password reset success email for: {email}");
-
     let job = PasswordResetSuccessEmailJob {
         email: email.to_string(),
         name: name.to_string(),
@@ -82,14 +60,8 @@ pub async fn queue_password_reset_success_email(
 
     // Push job to Redis queue
     match storage.push(job).await {
-        Ok(job_id) => {
-            println!("✅ [Apalis] Password reset success email queued with ID: {job_id:?}");
-            Ok(())
-        }
-        Err(e) => {
-            println!("❌ [Apalis] Failed to queue email job: {e}");
-            Err(Box::new(e))
-        }
+        Ok(_) => Ok(()),
+        Err(e) => Err(Box::new(e)),
     }
 }
 
@@ -100,10 +72,8 @@ pub fn queue_password_reset_success_email_nonblocking(
     reset_time: String,
 ) {
     tokio::spawn(async move {
-        if let Err(e) = queue_password_reset_success_email(&email, &name, &reset_time).await {
-            println!("❌ [Background Queue] Failed to queue password reset email for {email}: {e}");
-        } else {
-            println!("✅ [Background Queue] Password reset email queued for: {email}");
+        if let Err(_) = queue_password_reset_success_email(&email, &name, &reset_time).await {
+            // Failed to queue email
         }
     });
 }
@@ -116,12 +86,11 @@ where
         + Send
         + 'static,
 {
-    let job_name = job_name.to_string();
+    let _job_name = job_name.to_string();
     tokio::spawn(async move {
-        println!("🔄 [Background Queue] Starting job: {job_name}");
         match future().await {
-            Ok(_) => println!("✅ [Background Queue] Job completed: {job_name}"),
-            Err(e) => println!("❌ [Background Queue] Job failed {job_name}: {e}"),
+            Ok(_) => {}
+            Err(_) => {}
         }
     });
 }
@@ -129,8 +98,6 @@ where
 // Start the Apalis worker with Redis backend
 pub async fn start_email_worker() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
-
-    println!("🚀 [Apalis] Starting email worker with Redis backend: {redis_url}");
 
     // Connect to Redis
     let conn = apalis_redis::connect(redis_url).await?;

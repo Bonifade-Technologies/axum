@@ -28,11 +28,6 @@ pub async fn send_html_email(
     let from_email = env::var("FROM_EMAIL").unwrap_or_else(|_| smtp_username.clone());
     let from_name = env::var("FROM_NAME").unwrap_or_else(|_| "SecureAuth".to_string());
 
-    println!("🔧 HTML Email SMTP Configuration:");
-    println!("   Server: {smtp_host}:{smtp_port}");
-    println!("   Username: {smtp_username}");
-    println!("   From: {from_name} <{from_email}>");
-
     // Create email message
     let email = Message::builder()
         .from(format!("{from_name} <{from_email}>").parse::<Mailbox>()?)
@@ -44,8 +39,6 @@ pub async fn send_html_email(
     // Create SMTP transport using the same robust configuration as the existing email service
     let credentials = Credentials::new(smtp_username, smtp_password);
 
-    println!("🔧 Creating robust SMTP transport for HTML email");
-
     // Create TLS parameters that accept self-signed certificates (same as existing service)
     let tls_parameters = TlsParameters::builder(smtp_host.clone())
         .dangerous_accept_invalid_certs(true)
@@ -55,7 +48,6 @@ pub async fn send_html_email(
     // Use the same transport logic as the existing email service
     let transport = if smtp_port == 465 {
         // SSL/TLS (port 465)
-        println!("🔧 Using SSL/TLS for port 465");
         AsyncSmtpTransport::<Tokio1Executor>::relay(&smtp_host)?
             .port(smtp_port)
             .credentials(credentials)
@@ -64,7 +56,6 @@ pub async fn send_html_email(
             .build()
     } else if smtp_port == 587 || smtp_port == 25 {
         // STARTTLS (port 587) or plain (port 25)
-        println!("🔧 Using STARTTLS for port {smtp_port} (HTML email)");
         AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(&smtp_host)?
             .port(smtp_port)
             .credentials(credentials)
@@ -73,7 +64,6 @@ pub async fn send_html_email(
             .build()
     } else {
         // Default relay for other ports
-        println!("🔧 Using default relay for port {smtp_port}");
         AsyncSmtpTransport::<Tokio1Executor>::relay(&smtp_host)?
             .port(smtp_port)
             .credentials(credentials)
@@ -82,19 +72,9 @@ pub async fn send_html_email(
     };
 
     // Send email
-    println!("📤 Sending HTML email to: {to_email}");
     match transport.send(email).await {
-        Ok(response) => {
-            println!("✅ HTML email sent successfully to {to_email}: {response:?}");
-            Ok(())
-        }
-        Err(e) => {
-            println!("❌ Failed to send HTML email to {to_email}: {e:?}");
-            println!("🔍 Debug info:");
-            println!("   SMTP Server: {smtp_host}:{smtp_port}");
-            println!("   TLS Parameters: Self-signed certs accepted");
-            Err(Box::new(e))
-        }
+        Ok(_) => Ok(()),
+        Err(e) => Err(Box::new(e)),
     }
 }
 

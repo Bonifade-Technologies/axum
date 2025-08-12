@@ -21,20 +21,15 @@ async fn main() {
         .and_then(|v| v.parse().ok())
         .unwrap_or(500);
 
-    println!("🔌 Attempting database connection (max {max_attempts} attempts)...");
     let mut db_opt: Option<DatabaseConnection> = None;
     for attempt in 1..=max_attempts {
         match Database::connect(db_url).await {
             Ok(conn) => {
-                println!("✅ Database connected on attempt {attempt}");
                 db_opt = Some(conn);
                 break;
             }
-            Err(e) => {
+            Err(_) => {
                 let delay = base_delay_ms * attempt as u64;
-                eprintln!(
-                    "⚠️  DB connect attempt {attempt}/{max_attempts} failed: {e}. Retrying in {delay}ms"
-                );
                 sleep(Duration::from_millis(delay)).await;
             }
         }
@@ -45,26 +40,23 @@ async fn main() {
     });
 
     // Run database migrations automatically
-    println!("🛠  Running database migrations...");
     if let Err(e) = Migrator::up(&db, None).await {
         eprintln!("❌ Migration failed: {e}");
         std::process::exit(1);
     }
-    println!("✅ Migrations are up to date");
 
     // Initialize the Apalis job queue
     if let Err(e) = axum_template::utils::job_queue::init_job_queue().await {
-        println!("❌ Failed to initialize job queue: {e}");
+        eprintln!("❌ Failed to initialize job queue: {e}");
         std::process::exit(1);
     }
 
     // Start the Apalis email worker in the background
     tokio::spawn(async {
         if let Err(e) = axum_template::utils::job_queue::start_email_worker().await {
-            println!("❌ Email worker error: {e}");
+            eprintln!("❌ Email worker error: {e}");
         }
     });
 
-    println!("🚀 Apalis email worker started for background job processing");
     run(db).await;
 }

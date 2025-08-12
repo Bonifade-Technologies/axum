@@ -1,9 +1,8 @@
 use crate::{
-    config::database::db_connection, config::redis::redis_client, database::users as user,
-    resources::user_resource::UserResource,
+    config::redis::redis_client, database::users as user, resources::user_resource::UserResource,
 };
 use redis::AsyncCommands;
-use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+use sea_orm::{ColumnTrait, Database, EntityTrait, QueryFilter};
 
 // Cache TTL constants
 const USER_CACHE_TTL: u64 = 7 * 24 * 60 * 60; // 7 days for user data
@@ -35,28 +34,27 @@ pub async fn get_user_with_smart_cache(email: &str) -> Option<UserResource> {
 
             // Parse and return cached user
             if let Ok(user) = serde_json::from_str::<UserResource>(&user_json) {
-                println!("✅ Cache HIT for user: {email}");
                 return Some(user);
             }
         }
     }
 
-    println!("💾 Cache MISS for user: {email} - fetching from database");
-
     // Not in cache or cache failed - fetch from database
-    let db_user = user::Entity::find()
-        .filter(user::Column::Email.eq(email))
-        .filter(user::Column::DeletedAt.is_null())
-        .one(&db_connection().await)
-        .await;
+    if let Ok(db) = Database::connect(&*crate::config::database::DB_URL).await {
+        let db_user = user::Entity::find()
+            .filter(user::Column::Email.eq(email))
+            .filter(user::Column::DeletedAt.is_null())
+            .one(&db)
+            .await;
 
-    if let Ok(Some(user_model)) = db_user {
-        let user_resource = UserResource::from(&user_model);
+        if let Ok(Some(user_model)) = db_user {
+            let user_resource = UserResource::from(&user_model);
 
-        // Store in cache for future requests
-        cache_user_with_smart_ttl(email, &user_resource).await;
+            // Store in cache for future requests
+            cache_user_with_smart_ttl(email, &user_resource).await;
 
-        return Some(user_resource);
+            return Some(user_resource);
+        }
     }
 
     None
@@ -73,8 +71,6 @@ pub async fn cache_user_with_smart_ttl(email: &str, user: &UserResource) {
             // Store with smart TTL based on user activity
             let ttl = get_smart_ttl_for_user(email).await;
             let _: Result<(), redis::RedisError> = conn.set_ex(&redis_key, user_json, ttl).await;
-
-            println!("💾 Cached user: {email} with TTL: {ttl} seconds");
         }
     }
 }
@@ -88,37 +84,10 @@ async fn get_smart_ttl_for_user(email: &str) -> u64 {
         let login_count: Result<i64, redis::RedisError> = conn.get(&activity_key).await;
 
         match login_count {
-            Ok(count) if count > 20 => {
-                println!(
-                    "🔥 Very active user ({}+ logins): {} - using {} day TTL",
-                    count,
-                    email,
-                    ACTIVE_USER_TTL / (24 * 60 * 60)
-                );
-                ACTIVE_USER_TTL
-            }
-            Ok(count) if count > 5 => {
-                println!(
-                    "⚡ Regular user ({} logins): {} - using {} day TTL",
-                    count,
-                    email,
-                    USER_CACHE_TTL / (24 * 60 * 60)
-                );
-                USER_CACHE_TTL
-            }
-            Ok(count) => {
-                println!(
-                    "👤 New user ({} logins): {} - using {} hour TTL",
-                    count,
-                    email,
-                    SESSION_TTL / (60 * 60)
-                );
-                SESSION_TTL
-            }
-            Err(_) => {
-                println!("❓ Could not get activity for: {email} - using default TTL");
-                USER_CACHE_TTL
-            }
+            Ok(count) if count > 20 => ACTIVE_USER_TTL,
+            Ok(count) if count > 5 => USER_CACHE_TTL,
+            Ok(_) => SESSION_TTL,
+            Err(_) => USER_CACHE_TTL,
         }
     } else {
         USER_CACHE_TTL // Default to 7 days if Redis unavailable
@@ -133,12 +102,8 @@ pub async fn increment_user_activity(email: &str) {
         let activity_key = format!("activity:{email}");
 
         // Increment login counter with 30-day expiry
-        let new_count: Result<i64, redis::RedisError> = conn.incr(&activity_key, 1).await;
+        let _: Result<i64, redis::RedisError> = conn.incr(&activity_key, 1).await;
         let _: Result<(), redis::RedisError> = conn.expire(&activity_key, 30 * 24 * 60 * 60).await;
-
-        if let Ok(count) = new_count {
-            println!("📊 User {email} activity count: {count}");
-        }
     }
 }
 
@@ -151,7 +116,6 @@ pub async fn extend_user_cache_ttl(email: &str) {
         let new_ttl = get_smart_ttl_for_user(email).await;
 
         let _: Result<(), redis::RedisError> = conn.expire(&redis_key, new_ttl as i64).await;
-        println!("⏰ Extended TTL for user: {email} to {new_ttl} seconds");
     }
 }
 
@@ -167,6 +131,5 @@ pub async fn invalidate_user_cache(email: &str) {
     if let Ok(mut conn) = client.get_multiplexed_tokio_connection().await {
         let redis_key = format!("user:{email}");
         let _: Result<(), redis::RedisError> = conn.del(&redis_key).await;
-        println!("🗑️ Invalidated cache for user: {email}");
     }
 }
