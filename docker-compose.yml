@@ -17,6 +17,32 @@ services:
       timeout: 3s
       retries: 5
 
+  # PostgreSQL Database (dev/local)
+  postgres:
+    image: postgres:17-alpine
+    container_name: axum_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-appuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-app_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # Map to 5433 by default to avoid clashing with a host Postgres on 5432
+    ports:
+      - "${POSTGRES_HOST_PORT:-5433}:5432"
+    networks:
+      - axum_network
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-appuser} -d ${POSTGRES_DB:-app_db}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # Axum Application
   app:
     build:
@@ -30,6 +56,8 @@ services:
       - "${APP_PORT:-3003}:3003"
     depends_on:
       redis:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     networks:
       - axum_network
