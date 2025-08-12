@@ -1,6 +1,6 @@
 use axum_template::{config, run};
-use migration::{Migrator, MigratorTrait};
 use dotenvy::dotenv;
+use migration::{Migrator, MigratorTrait};
 use sea_orm::{Database, DatabaseConnection};
 use std::time::Duration;
 use tokio::time::sleep;
