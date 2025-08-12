@@ -40,7 +40,7 @@ pub async fn clear_all_caches() -> impl IntoResponse {
                         ),
                         Err(e) => {
                             let error_response = serde_json::json!({
-                                "redis": format!("Failed to delete keys: {}", e)
+                                "redis": format!("Failed to delete keys: {e}")
                             });
                             api_response::failure(
                                 Some("Cache clearing failed"),
@@ -52,7 +52,7 @@ pub async fn clear_all_caches() -> impl IntoResponse {
                 }
                 Err(e) => {
                     let error_response = serde_json::json!({
-                        "redis": format!("Failed to retrieve keys: {}", e)
+                        "redis": format!("Failed to retrieve keys: {e}")
                     });
                     api_response::failure(
                         Some("Cache clearing failed"),
@@ -64,7 +64,7 @@ pub async fn clear_all_caches() -> impl IntoResponse {
         }
         Err(e) => {
             let error_response = serde_json::json!({
-                "redis": format!("Redis connection failed: {}", e)
+                "redis": format!("Redis connection failed: {e}")
             });
             api_response::failure(
                 Some("Cache clearing failed"),
@@ -81,10 +81,10 @@ pub async fn clear_user_cache(Path(email): Path<String>) -> impl IntoResponse {
     match client.get_multiplexed_async_connection().await {
         Ok(mut conn) => {
             // Keys to clear for a specific user
-            let keys_to_clear = vec![format!("user:{}", email), format!("activity:{}", email)];
+            let keys_to_clear = vec![format!("user:{email}"), format!("activity:{email}")];
 
             // Get all tokens for this user
-            let token_pattern = format!("token:*");
+            let token_pattern = "token:*".to_string();
             let all_tokens: Result<Vec<String>, redis::RedisError> =
                 conn.keys(&token_pattern).await;
 
@@ -126,7 +126,7 @@ pub async fn clear_user_cache(Path(email): Path<String>) -> impl IntoResponse {
         }
         Err(e) => {
             let error_response = serde_json::json!({
-                "redis": format!("Redis connection failed: {}", e)
+                "redis": format!("Redis connection failed: {e}")
             });
             api_response::failure(
                 Some("User cache clearing failed"),

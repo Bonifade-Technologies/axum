@@ -45,14 +45,14 @@ async fn main() {
 
     // Initialize the Apalis job queue
     if let Err(e) = axum_template::utils::job_queue::init_job_queue().await {
-        println!("❌ Failed to initialize job queue: {}", e);
+        println!("❌ Failed to initialize job queue: {e}");
         std::process::exit(1);
     }
 
     // Start the Apalis email worker in the background
     tokio::spawn(async {
         if let Err(e) = axum_template::utils::job_queue::start_email_worker().await {
-            println!("❌ Email worker error: {}", e);
+            println!("❌ Email worker error: {e}");
         }
     });
 

@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use validator::{Validate, ValidationErrors};
 
-#[derive(Debug, Deserialize, Serialize, Validate)]
+#[derive(Debug, Deserialize, Serialize, Validate, Default)]
 #[serde(default)]
 pub struct SignupDto {
     #[validate(length(min = 1, message = "name is required"))]
@@ -26,19 +26,9 @@ pub struct SignupDto {
     pub phone: String,
 }
 
-impl Default for SignupDto {
-    fn default() -> Self {
-        Self {
-            name: String::new(),
-            email: String::new(),
-            password: String::new(),
-            password_confirmation: String::new(),
-            phone: String::new(),
-        }
-    }
-}
+// Default derived
 
-#[derive(Debug, Deserialize, Serialize, Validate)]
+#[derive(Debug, Deserialize, Serialize, Validate, Default)]
 #[serde(default)]
 pub struct LoginDto {
     #[validate(email(message = "invalid email"))]
@@ -49,16 +39,9 @@ pub struct LoginDto {
     pub password: String,
 }
 
-impl Default for LoginDto {
-    fn default() -> Self {
-        Self {
-            email: String::new(),
-            password: String::new(),
-        }
-    }
-}
+// Default derived
 
-#[derive(Debug, Deserialize, Serialize, Validate)]
+#[derive(Debug, Deserialize, Serialize, Validate, Default)]
 #[serde(default)]
 pub struct ForgotPasswordDto {
     #[validate(email(message = "invalid email"))]
@@ -66,15 +49,9 @@ pub struct ForgotPasswordDto {
     pub email: String,
 }
 
-impl Default for ForgotPasswordDto {
-    fn default() -> Self {
-        Self {
-            email: String::new(),
-        }
-    }
-}
+// Default derived
 
-#[derive(Debug, Deserialize, Serialize, Validate)]
+#[derive(Debug, Deserialize, Serialize, Validate, Default)]
 #[serde(default)]
 pub struct ResetPasswordDto {
     #[validate(email(message = "invalid email"))]
@@ -91,16 +68,7 @@ pub struct ResetPasswordDto {
     pub confirm_password: String,
 }
 
-impl Default for ResetPasswordDto {
-    fn default() -> Self {
-        Self {
-            email: String::new(),
-            otp: String::new(),
-            new_password: String::new(),
-            confirm_password: String::new(),
-        }
-    }
-}
+// Default derived
 
 pub fn validation_errors_to_map(errors: &ValidationErrors) -> HashMap<String, String> {
     let mut map = HashMap::new();

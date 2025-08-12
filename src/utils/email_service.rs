@@ -29,14 +29,14 @@ pub async fn send_html_email(
     let from_name = env::var("FROM_NAME").unwrap_or_else(|_| "SecureAuth".to_string());
 
     println!("🔧 HTML Email SMTP Configuration:");
-    println!("   Server: {}:{}", smtp_host, smtp_port);
-    println!("   Username: {}", smtp_username);
-    println!("   From: {} <{}>", from_name, from_email);
+    println!("   Server: {smtp_host}:{smtp_port}");
+    println!("   Username: {smtp_username}");
+    println!("   From: {from_name} <{from_email}>");
 
     // Create email message
     let email = Message::builder()
-        .from(format!("{} <{}>", from_name, from_email).parse::<Mailbox>()?)
-        .to(format!("{} <{}>", to_name, to_email).parse::<Mailbox>()?)
+        .from(format!("{from_name} <{from_email}>").parse::<Mailbox>()?)
+        .to(format!("{to_name} <{to_email}>").parse::<Mailbox>()?)
         .subject(subject)
         .header(ContentType::TEXT_HTML)
         .body(html_body.to_string())?;
@@ -64,7 +64,7 @@ pub async fn send_html_email(
             .build()
     } else if smtp_port == 587 || smtp_port == 25 {
         // STARTTLS (port 587) or plain (port 25)
-        println!("🔧 Using STARTTLS for port {} (HTML email)", smtp_port);
+        println!("🔧 Using STARTTLS for port {smtp_port} (HTML email)");
         AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(&smtp_host)?
             .port(smtp_port)
             .credentials(credentials)
@@ -73,7 +73,7 @@ pub async fn send_html_email(
             .build()
     } else {
         // Default relay for other ports
-        println!("🔧 Using default relay for port {}", smtp_port);
+        println!("🔧 Using default relay for port {smtp_port}");
         AsyncSmtpTransport::<Tokio1Executor>::relay(&smtp_host)?
             .port(smtp_port)
             .credentials(credentials)
@@ -82,19 +82,16 @@ pub async fn send_html_email(
     };
 
     // Send email
-    println!("📤 Sending HTML email to: {}", to_email);
+    println!("📤 Sending HTML email to: {to_email}");
     match transport.send(email).await {
         Ok(response) => {
-            println!(
-                "✅ HTML email sent successfully to {}: {:?}",
-                to_email, response
-            );
+            println!("✅ HTML email sent successfully to {to_email}: {response:?}");
             Ok(())
         }
         Err(e) => {
-            println!("❌ Failed to send HTML email to {}: {:?}", to_email, e);
+            println!("❌ Failed to send HTML email to {to_email}: {e:?}");
             println!("🔍 Debug info:");
-            println!("   SMTP Server: {}:{}", smtp_host, smtp_port);
+            println!("   SMTP Server: {smtp_host}:{smtp_port}");
             println!("   TLS Parameters: Self-signed certs accepted");
             Err(Box::new(e))
         }
@@ -111,7 +108,7 @@ pub fn render_password_reset_success_email(
     let template_path = "src/views/password_reset_success.html";
 
     if !Path::new(template_path).exists() {
-        return Err(format!("Template file not found: {}", template_path).into());
+        return Err(format!("Template file not found: {template_path}").into());
     }
 
     let tera = Tera::new("src/views/*.html")?;

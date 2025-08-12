@@ -5,8 +5,8 @@ pub mod database;
 pub mod email;
 pub mod redis;
 
-// JWT constants with fallback
-pub const JWT_SECRET: Lazy<String> = Lazy::new(|| {
+// JWT secret with fallback (static, not const)
+pub static JWT_SECRET: Lazy<String> = Lazy::new(|| {
     env::var("JWT_SECRET").unwrap_or_else(|_| {
         eprintln!(
             "Warning: JWT_SECRET not found in environment, using default (CHANGE IN PRODUCTION!)"

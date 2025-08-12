@@ -20,7 +20,7 @@ pub async fn get_user_with_smart_cache(email: &str) -> Option<UserResource> {
 
     // Try Redis first
     if let Ok(mut conn) = client.get_multiplexed_tokio_connection().await {
-        let redis_key = format!("user:{}", email);
+        let redis_key = format!("user:{email}");
 
         // Check if user exists in cache
         let cached_user: Result<String, redis::RedisError> = conn.get(&redis_key).await;
@@ -35,13 +35,13 @@ pub async fn get_user_with_smart_cache(email: &str) -> Option<UserResource> {
 
             // Parse and return cached user
             if let Ok(user) = serde_json::from_str::<UserResource>(&user_json) {
-                println!("✅ Cache HIT for user: {}", email);
+                println!("✅ Cache HIT for user: {email}");
                 return Some(user);
             }
         }
     }
 
-    println!("💾 Cache MISS for user: {} - fetching from database", email);
+    println!("💾 Cache MISS for user: {email} - fetching from database");
 
     // Not in cache or cache failed - fetch from database
     let db_user = user::Entity::find()
@@ -68,13 +68,13 @@ pub async fn cache_user_with_smart_ttl(email: &str, user: &UserResource) {
 
     if let Ok(mut conn) = client.get_multiplexed_tokio_connection().await {
         if let Ok(user_json) = serde_json::to_string(user) {
-            let redis_key = format!("user:{}", email);
+            let redis_key = format!("user:{email}");
 
             // Store with smart TTL based on user activity
             let ttl = get_smart_ttl_for_user(email).await;
             let _: Result<(), redis::RedisError> = conn.set_ex(&redis_key, user_json, ttl).await;
 
-            println!("💾 Cached user: {} with TTL: {} seconds", email, ttl);
+            println!("💾 Cached user: {email} with TTL: {ttl} seconds");
         }
     }
 }
@@ -84,7 +84,7 @@ async fn get_smart_ttl_for_user(email: &str) -> u64 {
     let client = redis_client();
 
     if let Ok(mut conn) = client.get_multiplexed_tokio_connection().await {
-        let activity_key = format!("activity:{}", email);
+        let activity_key = format!("activity:{email}");
         let login_count: Result<i64, redis::RedisError> = conn.get(&activity_key).await;
 
         match login_count {
@@ -116,10 +116,7 @@ async fn get_smart_ttl_for_user(email: &str) -> u64 {
                 SESSION_TTL
             }
             Err(_) => {
-                println!(
-                    "❓ Could not get activity for: {} - using default TTL",
-                    email
-                );
+                println!("❓ Could not get activity for: {email} - using default TTL");
                 USER_CACHE_TTL
             }
         }
@@ -133,14 +130,14 @@ pub async fn increment_user_activity(email: &str) {
     let client = redis_client();
 
     if let Ok(mut conn) = client.get_multiplexed_tokio_connection().await {
-        let activity_key = format!("activity:{}", email);
+        let activity_key = format!("activity:{email}");
 
         // Increment login counter with 30-day expiry
         let new_count: Result<i64, redis::RedisError> = conn.incr(&activity_key, 1).await;
         let _: Result<(), redis::RedisError> = conn.expire(&activity_key, 30 * 24 * 60 * 60).await;
 
         if let Ok(count) = new_count {
-            println!("📊 User {} activity count: {}", email, count);
+            println!("📊 User {email} activity count: {count}");
         }
     }
 }
@@ -150,11 +147,11 @@ pub async fn extend_user_cache_ttl(email: &str) {
     let client = redis_client();
 
     if let Ok(mut conn) = client.get_multiplexed_tokio_connection().await {
-        let redis_key = format!("user:{}", email);
+        let redis_key = format!("user:{email}");
         let new_ttl = get_smart_ttl_for_user(email).await;
 
         let _: Result<(), redis::RedisError> = conn.expire(&redis_key, new_ttl as i64).await;
-        println!("⏰ Extended TTL for user: {} to {} seconds", email, new_ttl);
+        println!("⏰ Extended TTL for user: {email} to {new_ttl} seconds");
     }
 }
 
@@ -168,8 +165,8 @@ pub async fn invalidate_user_cache(email: &str) {
     let client = redis_client();
 
     if let Ok(mut conn) = client.get_multiplexed_tokio_connection().await {
-        let redis_key = format!("user:{}", email);
+        let redis_key = format!("user:{email}");
         let _: Result<(), redis::RedisError> = conn.del(&redis_key).await;
-        println!("🗑️ Invalidated cache for user: {}", email);
+        println!("🗑️ Invalidated cache for user: {email}");
     }
 }

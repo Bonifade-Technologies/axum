@@ -34,10 +34,7 @@ pub fn create_smtp_transport(
 
     let credentials = Credentials::new(SMTP_USERNAME.clone(), SMTP_PASSWORD.clone());
 
-    println!(
-        "🔧 DEBUG: Creating SMTP transport for {}:{}",
-        *SMTP_HOST, *SMTP_PORT
-    );
+    println!("🔧 DEBUG: Creating SMTP transport for {}:{}", *SMTP_HOST, *SMTP_PORT);
     println!("🔧 DEBUG: Username: {}", *SMTP_USERNAME);
 
     // Create TLS parameters that accept self-signed certificates
@@ -82,14 +79,14 @@ pub async fn send_email(
     subject: &str,
     body: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    println!("🔧 DEBUG: Attempting to send email to: {}", to_email);
+    println!("🔧 DEBUG: Attempting to send email to: {to_email}");
     println!("🔧 DEBUG: SMTP Host: {}:{}", *SMTP_HOST, *SMTP_PORT);
     println!("🔧 DEBUG: FROM: {} <{}>", *FROM_NAME, *FROM_EMAIL);
 
     // Use plain text content type to avoid InvalidContentType error
     let email = Message::builder()
-        .from(format!("{} <{}>", *FROM_NAME, *FROM_EMAIL).parse()?)
-        .to(format!("{} <{}>", to_name, to_email).parse()?)
+    .from(format!("{} <{}>", *FROM_NAME, *FROM_EMAIL).parse()?)
+    .to(format!("{to_name} <{to_email}>").parse()?)
         .subject(subject)
         .header(ContentType::TEXT_PLAIN)
         .body(body.to_string())?;
@@ -99,11 +96,11 @@ pub async fn send_email(
     println!("🔧 DEBUG: Sending email via SMTP...");
     match mailer.send(email).await {
         Ok(response) => {
-            println!("✅ Email sent successfully: {:?}", response);
+            println!("✅ Email sent successfully: {response:?}");
             Ok(())
         }
         Err(e) => {
-            println!("❌ Failed to send email: {:?}", e);
+            println!("❌ Failed to send email: {e:?}");
             Err(Box::new(e))
         }
     }
@@ -127,19 +124,18 @@ pub async fn send_otp_email(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let subject = "Password Reset OTP - Axum Auth";
     let body = format!(
-        "Hello {},
+        "Hello {to_name},
 
 You have requested to reset your password. Please use the following OTP code:
 
-OTP: {}
+OTP: {otp}
 
 This code will expire in 10 minutes for security reasons.
 
 If you did not request this password reset, please ignore this email.
 
 Best regards,
-Axum Auth Team",
-        to_name, otp
+Axum Auth Team"
     );
 
     send_email(to_email, to_name, subject, &body).await

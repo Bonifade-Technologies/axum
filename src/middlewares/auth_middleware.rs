@@ -19,7 +19,7 @@ pub async fn auth_middleware(request: Request<Body>, next: Next) -> Result<Respo
             if let Ok(auth_str) = header.to_str() {
                 if auth_str.starts_with("Bearer ") {
                     let token = auth_str.trim_start_matches("Bearer ").trim();
-                    println!("DEBUG: Token received: {}", token);
+                    println!("DEBUG: Token received: {token}");
 
                     // Validate JWT token
                     let token_data = decode::<Claims>(
@@ -31,7 +31,7 @@ pub async fn auth_middleware(request: Request<Body>, next: Next) -> Result<Respo
                     match token_data {
                         Ok(token_data) => {
                             let email = token_data.claims.sub.clone();
-                            println!("DEBUG: JWT valid, email: {}", email);
+                            println!("DEBUG: JWT valid, email: {email}");
 
                             // Verify token with Redis (for revocation support)
                             let client = redis_client();
@@ -39,14 +39,11 @@ pub async fn auth_middleware(request: Request<Body>, next: Next) -> Result<Respo
                                 Ok(mut conn) => {
                                     // Check if token exists in Redis
                                     match conn
-                                        .get::<_, Option<String>>(format!("token:{}", token))
+                                        .get::<_, Option<String>>(format!("token:{token}"))
                                         .await
                                     {
                                         Ok(Some(user_email)) => {
-                                            println!(
-                                                "DEBUG: Token found in Redis for email: {}",
-                                                user_email
-                                            );
+                                            println!("DEBUG: Token found in Redis for email: {user_email}");
 
                                             // Ensure the email from JWT matches the one in Redis
                                             if user_email == email {
@@ -65,22 +62,19 @@ pub async fn auth_middleware(request: Request<Body>, next: Next) -> Result<Respo
                                                     println!("DEBUG: User not found in cache or database");
                                                 }
                                             } else {
-                                                println!(
-                                                    "DEBUG: Email mismatch - JWT: {}, Redis: {}",
-                                                    email, user_email
-                                                );
+                                                println!("DEBUG: Email mismatch - JWT: {email}, Redis: {user_email}");
                                             }
                                         }
                                         Ok(None) => {
                                             println!("DEBUG: Token not found in Redis");
                                         }
                                         Err(e) => {
-                                            println!("DEBUG: Redis error checking token: {}", e);
+                                            println!("DEBUG: Redis error checking token: {e}");
                                         }
                                     }
                                 }
                                 Err(e) => {
-                                    println!("DEBUG: Redis connection error: {}", e);
+                                    println!("DEBUG: Redis connection error: {e}");
                                     // If Redis is down, get user directly from database
                                     if let Some(user_resource) =
                                         get_user_from_cache_or_db(&email).await
@@ -101,7 +95,7 @@ pub async fn auth_middleware(request: Request<Body>, next: Next) -> Result<Respo
                             }
                         }
                         Err(e) => {
-                            println!("DEBUG: JWT validation error: {}", e);
+                            println!("DEBUG: JWT validation error: {e}");
                         }
                     }
                 } else {

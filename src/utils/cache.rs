@@ -16,7 +16,7 @@ where
 {
     let client = redis_client();
     let mut conn = client.get_multiplexed_async_connection().await?;
-    let cache_key = format!("{}:{}", key, query_params);
+    let cache_key = format!("{key}:{query_params}");
 
     match conn.get::<_, Option<String>>(&cache_key).await {
         Ok(Some(cached)) => {

@@ -137,7 +137,14 @@ pub async fn list_users(
                 query.order_by_desc(user::Column::Email)
             }
         }
-        "created_at" | _ => {
+        "created_at" => {
+            if sort_order == "asc" {
+                query.order_by_asc(user::Column::CreatedAt)
+            } else {
+                query.order_by_desc(user::Column::CreatedAt)
+            }
+        }
+        _ => {
             if sort_order == "asc" {
                 query.order_by_asc(user::Column::CreatedAt)
             } else {
@@ -218,7 +225,14 @@ pub async fn list_deleted_users(
                 query.order_by_desc(user::Column::Email)
             }
         }
-        "deleted_at" | _ => {
+        "deleted_at" => {
+            if sort_order == "asc" {
+                query.order_by_asc(user::Column::DeletedAt)
+            } else {
+                query.order_by_desc(user::Column::DeletedAt)
+            }
+        }
+        _ => {
             if sort_order == "asc" {
                 query.order_by_asc(user::Column::DeletedAt)
             } else {
@@ -372,7 +386,7 @@ pub async fn force_delete_user(
 
                     api_response::success(
                         Some("User permanently deleted"),
-                        Some(format!("User with ID {} has been permanently deleted", id)),
+                        Some(format!("User with ID {id} has been permanently deleted")),
                         None,
                     )
                 }

@@ -7,7 +7,7 @@ use axum::{
 };
 use serde::de::DeserializeOwned;
 use std::collections::HashMap;
-use std::future::Future;
+// no need for Future import with async fn
 use validator::Validate;
 
 pub struct ValidatedJson<T>(pub T);
@@ -19,20 +19,19 @@ where
 {
     type Rejection = Response;
 
-    fn from_request(
+    async fn from_request(
         req: Request,
         state: &S,
-    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
-        async move {
+    ) -> Result<Self, Self::Rejection> {
             let payload = match Json::<T>::from_request(req, state).await {
                 Ok(Json(payload)) => payload,
                 Err(rejection) => {
                     let error_message = match rejection {
                         JsonRejection::JsonDataError(_err) => {
-                            format!("Kindly pass a valid JSON data: {}", _err).to_string()
+                            format!("Kindly pass a valid JSON data: {_err}")
                         }
                         JsonRejection::JsonSyntaxError(_err) => {
-                            format!("Kindly pass a valid JSON body").to_string()
+                            "Kindly pass a valid JSON body".to_string()
                         }
                         JsonRejection::MissingJsonContentType(_) => {
                             "Content-Type must be application/json".to_string()
@@ -57,7 +56,7 @@ where
                             .message
                             .as_ref()
                             .map(|m| m.to_string())
-                            .unwrap_or_else(|| format!("{} is invalid", field));
+                            .unwrap_or_else(|| format!("{field} is invalid"));
                         error_map.insert(field.to_string(), message);
                     }
                 }
@@ -72,4 +71,3 @@ where
             Ok(ValidatedJson(payload))
         }
     }
-}

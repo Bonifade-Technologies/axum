@@ -97,7 +97,7 @@ pub async fn register(
 
                 // Store JWT token in Redis
                 let _: Result<(), redis::RedisError> = conn
-                    .set_ex(format!("token:{}", token), user.email.clone(), 24 * 60 * 60)
+                    .set_ex(format!("token:{token}"), user.email.clone(), 24 * 60 * 60)
                     .await;
 
                 // Initialize activity counter
@@ -172,7 +172,7 @@ pub async fn login(
                 }
             }
             Err(e) => {
-                println!("DEBUG: Failed to invalidate old tokens: {}", e);
+                println!("DEBUG: Failed to invalidate old tokens: {e}");
                 // We continue anyway - this shouldn't block login
             }
         }
@@ -196,11 +196,7 @@ pub async fn login(
         let client = redis_client();
         if let Ok(mut conn) = client.get_multiplexed_tokio_connection().await {
             let _: Result<(), redis::RedisError> = conn
-                .set_ex(
-                    format!("token:{}", token),
-                    payload.email.clone(),
-                    24 * 60 * 60,
-                )
+                .set_ex(format!("token:{token}"), payload.email.clone(), 24 * 60 * 60)
                 .await;
         }
 
@@ -277,7 +273,7 @@ pub async fn logout(
         }
         Err(e) => {
             let error_response = serde_json::json!({
-                "redis": format!("Redis connection failed: {}", e)
+                "redis": format!("Redis connection failed: {e}")
             });
             api_response::failure(
                 Some("Logout failed"),
@@ -318,7 +314,7 @@ pub async fn forgot_password(
             }
         }
         Err(e) => {
-            println!("ERROR: Rate limit check failed: {}", e);
+            println!("ERROR: Rate limit check failed: {e}");
             // Continue anyway - don't block user due to Redis issues
         }
     }
@@ -361,7 +357,7 @@ pub async fn forgot_password(
                 Ok(_) => {
                     // Set rate limit after successful email send
                     if let Err(e) = set_forgot_password_rate_limit(&payload.email).await {
-                        println!("WARNING: Failed to set rate limit: {}", e);
+                        println!("WARNING: Failed to set rate limit: {e}");
                         // Continue anyway - email was sent successfully
                     }
 
@@ -379,7 +375,7 @@ pub async fn forgot_password(
                     )
                 }
                 Err(e) => {
-                    println!("ERROR: Failed to send email: {}", e);
+                    println!("ERROR: Failed to send email: {e}");
                     let error_response = serde_json::json!({
                         "email": "Failed to send reset email. Please try again later."
                     });
@@ -392,7 +388,7 @@ pub async fn forgot_password(
             }
         }
         Err(e) => {
-            println!("ERROR: Failed to store OTP: {}", e);
+            println!("ERROR: Failed to store OTP: {e}");
             let error_response = serde_json::json!({
                 "system": "Unable to process password reset request"
             });
@@ -442,10 +438,7 @@ pub async fn reset_password(
             match update_user_password(&payload.email, &payload.new_password).await {
                 Ok(true) => {
                     if let Err(e) = invalidate_all_user_tokens(&payload.email).await {
-                        println!(
-                            "WARNING: Failed to invalidate tokens after password reset: {}",
-                            e
-                        );
+                        println!("WARNING: Failed to invalidate tokens after password reset: {e}");
                     }
 
                     // Queue success email in background (truly async - don't await)
@@ -458,12 +451,9 @@ pub async fn reset_password(
                         if let Err(e) =
                             queue_password_reset_success_email(&email, &name, &reset_time).await
                         {
-                            println!(
-                                "WARNING: Failed to queue password reset success email: {}",
-                                e
-                            );
+                            println!("WARNING: Failed to queue password reset success email: {e}");
                         } else {
-                            println!("✅ Password reset success email queued for: {}", email);
+                            println!("✅ Password reset success email queued for: {email}");
                         }
                     });
 
@@ -489,7 +479,7 @@ pub async fn reset_password(
                     )
                 }
                 Err(e) => {
-                    println!("ERROR: Failed to update password: {}", e);
+                    println!("ERROR: Failed to update password: {e}");
                     let error_response = serde_json::json!({
                         "system": "Failed to update password. Please try again."
                     });
@@ -513,7 +503,7 @@ pub async fn reset_password(
             )
         }
         Err(e) => {
-            println!("ERROR: Failed to verify OTP: {}", e);
+            println!("ERROR: Failed to verify OTP: {e}");
             let error_response = serde_json::json!({
                 "system": "Unable to verify OTP. Please try again."
             });

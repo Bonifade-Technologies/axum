@@ -58,7 +58,7 @@ pub fn generate_jwt_token(email: &str) -> Result<String, jsonwebtoken::errors::E
 pub async fn unique_email(email: &str) -> bool {
     let client = redis_client();
     if let Ok(mut conn) = client.get_multiplexed_tokio_connection().await {
-        let redis_key = format!("user:{}", email);
+        let redis_key = format!("user:{email}");
         let exists: Result<bool, redis::RedisError> = conn.exists(&redis_key).await;
         if let Ok(true) = exists {
             return false;
@@ -81,7 +81,7 @@ pub async fn unique_email(email: &str) -> bool {
 pub async fn exist_email(email: &str) -> bool {
     let client = redis_client();
     if let Ok(mut conn) = client.get_multiplexed_tokio_connection().await {
-        let redis_key = format!("user:{}", email);
+        let redis_key = format!("user:{email}");
         let exists: Result<bool, redis::RedisError> = conn.exists(&redis_key).await;
         if let Ok(true) = exists {
             return true;
@@ -115,7 +115,7 @@ pub async fn get_complete_user_from_cache_or_db(email: &str) -> Option<CachedUse
 
     // Try Redis first
     if let Ok(mut conn) = client.get_multiplexed_tokio_connection().await {
-        let redis_key = format!("user:{}", email);
+        let redis_key = format!("user:{email}");
 
         // Check if user exists in cache
         let cached_user: Result<String, redis::RedisError> = conn.get(&redis_key).await;
@@ -127,13 +127,13 @@ pub async fn get_complete_user_from_cache_or_db(email: &str) -> Option<CachedUse
 
             // Parse and return cached user with password
             if let Ok(cached_user) = serde_json::from_str::<CachedUser>(&user_json) {
-                println!("✅ Cache HIT for user: {}", email);
+                println!("✅ Cache HIT for user: {email}");
                 return Some(cached_user);
             }
         }
     }
 
-    println!("💾 Cache MISS for user: {} - fetching from database", email);
+    println!("💾 Cache MISS for user: {email} - fetching from database");
 
     // Not in cache or cache failed - fetch from database
     let db_user = user::Entity::find()
@@ -163,16 +163,13 @@ pub async fn cache_complete_user_data(email: &str, cached_user: &CachedUser) {
 
     if let Ok(mut conn) = client.get_multiplexed_tokio_connection().await {
         if let Ok(user_json) = serde_json::to_string(cached_user) {
-            let redis_key = format!("user:{}", email);
+            let redis_key = format!("user:{email}");
 
             // Store with smart TTL based on user activity
             let ttl = get_smart_ttl_for_user(email).await;
             let _: Result<(), redis::RedisError> = conn.set_ex(&redis_key, user_json, ttl).await;
 
-            println!(
-                "💾 Cached complete user data for: {} with TTL: {} seconds",
-                email, ttl
-            );
+            println!("💾 Cached complete user data for: {email} with TTL: {ttl} seconds");
         }
     }
 }
@@ -183,7 +180,7 @@ pub async fn cache_user_data(email: &str, user: &UserResource) {
 
     if let Ok(mut conn) = client.get_multiplexed_tokio_connection().await {
         if let Ok(user_json) = serde_json::to_string(user) {
-            let redis_key = format!("user_basic:{}", email);
+            let redis_key = format!("user_basic:{email}");
 
             // Store with smart TTL based on user activity
             let ttl = get_smart_ttl_for_user(email).await;
@@ -199,10 +196,10 @@ pub async fn authenticate_user(email: &str, password: &str) -> Option<UserResour
             // Increment activity for smart TTL
             increment_user_activity(email).await;
 
-            println!("🔐 Password verified from cache for user: {}", email);
+            println!("🔐 Password verified from cache for user: {email}");
             return Some(cached_user.user_resource);
         } else {
-            println!("❌ Invalid password for user: {}", email);
+            println!("❌ Invalid password for user: {email}");
         }
     }
     None
@@ -212,7 +209,7 @@ async fn get_smart_ttl_for_user(email: &str) -> u64 {
     let client = redis_client();
 
     if let Ok(mut conn) = client.get_multiplexed_tokio_connection().await {
-        let activity_key = format!("activity:{}", email);
+        let activity_key = format!("activity:{email}");
         let login_count: Result<i64, redis::RedisError> = conn.get(&activity_key).await;
 
         match login_count {
@@ -229,7 +226,7 @@ pub async fn increment_user_activity(email: &str) {
     let client = redis_client();
 
     if let Ok(mut conn) = client.get_multiplexed_tokio_connection().await {
-        let activity_key = format!("activity:{}", email);
+        let activity_key = format!("activity:{email}");
 
         // Increment activity counter with sliding window TTL
         let _: Result<i64, redis::RedisError> = conn.incr(&activity_key, 1).await;
@@ -279,7 +276,7 @@ pub async fn store_otp(email: &str, otp: &str) -> Result<(), redis::RedisError> 
     let client = redis_client();
     let mut conn = client.get_multiplexed_async_connection().await?;
 
-    let otp_key = format!("otp:{}", email);
+    let otp_key = format!("otp:{email}");
     let otp_expiry = 10 * 60; // 10 minutes in seconds
 
     conn.set_ex::<_, _, ()>(otp_key, otp, otp_expiry).await?;
@@ -294,7 +291,7 @@ pub async fn verify_and_consume_otp(
     let client = redis_client();
     let mut conn = client.get_multiplexed_async_connection().await?;
 
-    let otp_key = format!("otp:{}", email);
+    let otp_key = format!("otp:{email}");
 
     // Get the stored OTP
     let stored_otp: Option<String> = conn.get(&otp_key).await?;
@@ -364,7 +361,7 @@ pub async fn can_request_forgot_password(email: &str) -> Result<bool, redis::Red
     let client = redis_client();
     let mut conn = client.get_multiplexed_async_connection().await?;
 
-    let rate_limit_key = format!("rate_limit:forgot_password:{}", email);
+    let rate_limit_key = format!("rate_limit:forgot_password:{email}");
 
     // Check if rate limit key exists
     let exists: bool = conn.exists(&rate_limit_key).await?;
@@ -372,10 +369,7 @@ pub async fn can_request_forgot_password(email: &str) -> Result<bool, redis::Red
     if exists {
         // Get remaining TTL
         let ttl: i64 = conn.ttl(&rate_limit_key).await.unwrap_or(0);
-        println!(
-            "🚫 Rate limit active for {}: {} seconds remaining",
-            email, ttl
-        );
+        println!("🚫 Rate limit active for {email}: {ttl} seconds remaining");
         Ok(false)
     } else {
         Ok(true)
@@ -387,15 +381,12 @@ pub async fn set_forgot_password_rate_limit(email: &str) -> Result<(), redis::Re
     let client = redis_client();
     let mut conn = client.get_multiplexed_async_connection().await?;
 
-    let rate_limit_key = format!("rate_limit:forgot_password:{}", email);
+    let rate_limit_key = format!("rate_limit:forgot_password:{email}");
 
     // Set rate limit with 5-minute expiration
     conn.set_ex::<_, _, ()>(rate_limit_key, "1", FORGOT_PASSWORD_RATE_LIMIT)
         .await?;
-    println!(
-        "⏰ Rate limit set for {}: {} seconds",
-        email, FORGOT_PASSWORD_RATE_LIMIT
-    );
+    println!("⏰ Rate limit set for {email}: {FORGOT_PASSWORD_RATE_LIMIT} seconds");
 
     Ok(())
 }
@@ -407,7 +398,7 @@ pub async fn get_forgot_password_rate_limit_remaining(
     let client = redis_client();
     let mut conn = client.get_multiplexed_async_connection().await?;
 
-    let rate_limit_key = format!("rate_limit:forgot_password:{}", email);
+    let rate_limit_key = format!("rate_limit:forgot_password:{email}");
     let ttl: i64 = conn.ttl(&rate_limit_key).await.unwrap_or(0);
 
     Ok(ttl)
