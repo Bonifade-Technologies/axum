@@ -26,7 +26,7 @@ jobs:
         ports:
           - 6379:6379
       postgres:
-        image: postgres:16-alpine
+        image: postgres:15-alpine
         env:
           POSTGRES_USER: test_user
           POSTGRES_PASSWORD: test_password
@@ -145,23 +145,24 @@ jobs:
           port: ${{ secrets.PORT || 22 }}
           script: |
             # Navigate to application directory
-            cd /opt/axum-app || exit 1
+            cd /www/dk_project/dk_app/axum_template || exit 1
 
             # Pull latest changes
             git pull origin master
 
-            # Stop current services
-            docker-compose -f docker-compose.yml -f docker-compose.prod.yml down
+            # Stop current services (single compose file only)
+            docker-compose down
 
-            # Build and start services (this will build the image locally)
-            docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+            # Build and start services using only docker-compose.yml
+            docker-compose up -d --build
 
             # Clean up unused images
-            docker image prune -f
+            docker system prune -f --all
 
             # Health check
             sleep 30
-            curl -f http://localhost:3001/health || exit 1
+            # Adjusted to match APP_PORT default (3003) in docker-compose.yml
+            curl -f http://localhost:3003/health || exit 1
 
             echo "Deployment completed successfully!"
 
